@@ -98,3 +98,15 @@ test('pending profile checks progress while unscanned schools remain',async()=>{
  assert.equal(one('SELECT COUNT(*) n FROM collection_progress').n,3);assert.equal(one("SELECT COUNT(*) n FROM collection_profiles WHERE status='complete'").n,1);assert.equal(one('SELECT x_url FROM coaches WHERE id=1').x_url,'https://x.com/FirstCoach');collector.pause();
  }finally{global.fetch=originalFetch;}
 });
+
+test('graduation-year name suffixes and position-only roles are collected as football coaches',()=>{
+ const html='<table>'+row("James Perry '00",'head@example.edu','Head Coach')+row('Mitchell Jonke ’21','qb@example.edu','Quarterbacks')+row('First Coach','lb@example.edu','Inside Linebackers')+'</table>';
+ const rows=parseDirectory(html,url);assert.equal(rows.length,3);assert.equal(rows[0].role,'Head Coach');assert.equal(rows[1].role,'Quarterbacks');assert.equal(rows[2].email,'lb@example.edu');
+});
+test('repair queues previously scanned schools without deleting saved contacts or evidence',async()=>{
+ const db=new DatabaseSync(':memory:');db.exec(`CREATE TABLE schools(id INTEGER PRIMARY KEY,name TEXT,division TEXT,staff_url TEXT);CREATE TABLE coaches(id INTEGER PRIMARY KEY,school_id INTEGER,name TEXT,role TEXT DEFAULT '',email TEXT DEFAULT '',phone TEXT DEFAULT '',x_url TEXT DEFAULT '',source_url TEXT DEFAULT '',status TEXT DEFAULT '',verified_at TEXT DEFAULT '');CREATE TABLE collection_progress(school_id INTEGER PRIMARY KEY,status TEXT,source_url TEXT DEFAULT '',checked_at TEXT DEFAULT '',imported INTEGER DEFAULT 0,error TEXT DEFAULT '');INSERT INTO schools VALUES(1,'Example University','D2','https://example.edu/sports/football/coaches');INSERT INTO collection_progress(school_id,status) VALUES(1,'complete');INSERT INTO coaches(id,school_id,name,role,email) VALUES(1,1,'Assistant Coach','Assistant Coach','assistant@example.edu');`);
+ const query=(sql,...p)=>db.prepare(sql).all(...p),one=(sql,...p)=>db.prepare(sql).get(...p),run=(sql,...p)=>db.prepare(sql).run(...p),originalFetch=global.fetch;
+ global.fetch=async u=>new Response(String(u).endsWith('robots.txt')?'User-agent: *\nDisallow:':'<table>'+row("Head Coach '00",'head@example.edu','Head Coach')+'</table>',{headers:{'content-type':'text/html'}});
+ try{const collector=installCollector({db,query,one,run,inspectUrl:async()=>{}});assert.equal(collector.status().coachingRefreshPending,1);assert.equal(one('SELECT COUNT(*) n FROM coaches').n,1);collector.start();for(let i=0;i<100&&collector.status().busy;i++)await new Promise(r=>setTimeout(r,5));assert.equal(one('SELECT COUNT(*) n FROM coaches').n,2);assert.equal(collector.status().coachingRefreshPending,0);assert.equal(one("SELECT COUNT(*) n FROM collection_evidence WHERE decision='imported'").n,1);collector.pause();}finally{global.fetch=originalFetch;}
+});
+test('alumni year suffixes match existing plain-name coach records',()=>assert.equal(normalize("James Perry '00"),normalize('James Perry')));
