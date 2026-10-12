@@ -21,6 +21,7 @@ CREATE TABLE IF NOT EXISTS contact_candidates(id INTEGER PRIMARY KEY, school_id 
 CREATE TABLE IF NOT EXISTS activities(id INTEGER PRIMARY KEY, coach_id INTEGER REFERENCES coaches(id) ON DELETE SET NULL, kind TEXT NOT NULL, detail TEXT NOT NULL, created_at TEXT DEFAULT CURRENT_TIMESTAMP);
 CREATE TABLE IF NOT EXISTS suppression(email TEXT PRIMARY KEY, reason TEXT DEFAULT '', created_at TEXT DEFAULT CURRENT_TIMESTAMP);`);
 if(!db.prepare("PRAGMA table_info(coaches)").all().some(c=>c.name==='phone'))db.exec("ALTER TABLE coaches ADD COLUMN phone TEXT DEFAULT ''");
+db.exec("CREATE TABLE IF NOT EXISTS directory_scans(school_id INTEGER PRIMARY KEY REFERENCES schools(id) ON DELETE CASCADE, source_url TEXT NOT NULL, status TEXT NOT NULL, emails INTEGER DEFAULT 0, social INTEGER DEFAULT 0, scanned_at TEXT DEFAULT CURRENT_TIMESTAMP, error TEXT DEFAULT '')");
 const query=(sql,...p)=>db.prepare(sql).all(...p), one=(sql,...p)=>db.prepare(sql).get(...p), run=(sql,...p)=>db.prepare(sql).run(...p);
 const hash=(x)=>crypto.createHash('sha256').update(x).digest('hex');
 function passwordHash(p,salt){return crypto.scryptSync(p,salt,64).toString('hex')}
@@ -55,6 +56,32 @@ if(p==='/api/dashboard')return json(res,200,{schools:one('SELECT COUNT(*) n FROM
 if(p==='/api/schools'&&method==='GET')return json(res,200,query('SELECT * FROM schools ORDER BY name LIMIT 5000'));
 if(p==='/api/schools'&&method==='POST'){const b=await body(req),division=clean(b.division);if(!['FBS','FCS','D2','D3'].includes(division))throw Error('Invalid division');const r=run('INSERT INTO schools(name,division,conference,state,staff_url) VALUES(?,?,?,?,?)',requireText(b.name,'School name',200),division,clean(b.conference),clean(b.state,30),safeUrl(b.staff_url));return json(res,201,{id:Number(r.lastInsertRowid)})}
 if(p==='/api/schools/import'&&method==='POST'){const b=await body(req);if(!Array.isArray(b.rows)||b.rows.length>1500)throw Error('Import up to 1500 rows');let count=0;for(const x of b.rows){if(!['FBS','FCS','D2','D3'].includes(x.division)||!clean(x.name))continue;run('INSERT OR IGNORE INTO schools(name,division,conference,state,staff_url) VALUES(?,?,?,?,?)',clean(x.name,200),x.division,clean(x.conference),clean(x.state,30),x.staff_url?safeUrl(x.staff_url):'');count++}return json(res,200,{processed:count})}
+if(p==='/api/directory-scan/status'&&method==='GET'){
+ const counts=one("SELECT COUNT(*) total, SUM(CASE WHEN staff_url!='' THEN 1 ELSE 0 END) with_url FROM schools");
+ const scans=one("SELECT COUNT(*) attempted, SUM(CASE WHEN status='ok' THEN 1 ELSE 0 END) successful FROM directory_scans");
+ return json(res,200,{total:counts.total,with_url:counts.with_url||0,attempted:scans.attempted||0,successful:scans.successful||0,pendingReview:one("SELECT COUNT(*) n FROM contact_candidates WHERE status='pending'").n});
+}
+if(p==='/api/directory-scan/batch'&&method==='POST'){
+ const b=await body(req),limit=Math.min(5,Math.max(1,Number(b.limit)||3));
+ const schoolsToScan=query("SELECT s.id,s.name,s.staff_url FROM schools s LEFT JOIN directory_scans d ON d.school_id=s.id WHERE s.staff_url!='' AND (d.school_id IS NULL OR (d.status='error' AND d.scanned_at < datetime('now','-7 days'))) ORDER BY s.id LIMIT ?",limit);
+ let succeeded=0,failed=0,foundEmails=0,foundSocial=0;
+ for(const school of schoolsToScan){
+  try{
+   const result=await collect(school.staff_url);
+   for(const email of result.emails)run('INSERT OR IGNORE INTO contact_candidates(school_id,email,source_url) VALUES(?,?,?)',school.id,email,school.staff_url);
+   for(const social of result.social){
+    const col=social.includes('instagram.com')?'instagram_url':'x_url';
+    run('INSERT OR IGNORE INTO contact_candidates(school_id,'+col+',source_url) VALUES(?,?,?)',school.id,social,school.staff_url);
+   }
+   run("INSERT INTO directory_scans(school_id,source_url,status,emails,social,scanned_at,error) VALUES(?,?,?,?,?,CURRENT_TIMESTAMP,'') ON CONFLICT(school_id) DO UPDATE SET source_url=excluded.source_url,status=excluded.status,emails=excluded.emails,social=excluded.social,scanned_at=CURRENT_TIMESTAMP,error=''",school.id,school.staff_url,'ok',result.emails.length,result.social.length);
+   succeeded++;foundEmails+=result.emails.length;foundSocial+=result.social.length;
+  }catch(e){
+   run("INSERT INTO directory_scans(school_id,source_url,status,error,scanned_at) VALUES(?,?,?, ?,CURRENT_TIMESTAMP) ON CONFLICT(school_id) DO UPDATE SET source_url=excluded.source_url,status=excluded.status,error=excluded.error,scanned_at=CURRENT_TIMESTAMP",school.id,school.staff_url,'error',clean(e.message,200));
+   failed++;
+  }
+ }
+ return json(res,200,{scanned:schoolsToScan.length,succeeded,failed,foundEmails,foundSocial,note:'Contacts are candidates, not named verified coaches. Only schools with an official staff URL are scanned.'});
+}
 if(p==='/api/coaches/verify-batch'&&method==='POST'){
  const b=await body(req),limit=Math.min(10,Math.max(1,Number(b.limit)||10));
  const rows=query("SELECT c.id,c.name,c.email,c.source_url,s.staff_url FROM coaches c JOIN schools s ON s.id=c.school_id WHERE c.status!='verified' AND c.name!='' AND c.email!='' AND (c.source_url!='' OR s.staff_url!='') ORDER BY c.id LIMIT ?",limit);
