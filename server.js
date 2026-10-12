@@ -20,6 +20,7 @@ CREATE TABLE IF NOT EXISTS campaign_recipients(id INTEGER PRIMARY KEY, campaign_
 CREATE TABLE IF NOT EXISTS contact_candidates(id INTEGER PRIMARY KEY, school_id INTEGER NOT NULL REFERENCES schools(id) ON DELETE CASCADE, name TEXT DEFAULT '', email TEXT DEFAULT '', x_url TEXT DEFAULT '', instagram_url TEXT DEFAULT '', source_url TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'pending', created_at TEXT DEFAULT CURRENT_TIMESTAMP, UNIQUE(school_id,email,source_url));
 CREATE TABLE IF NOT EXISTS activities(id INTEGER PRIMARY KEY, coach_id INTEGER REFERENCES coaches(id) ON DELETE SET NULL, kind TEXT NOT NULL, detail TEXT NOT NULL, created_at TEXT DEFAULT CURRENT_TIMESTAMP);
 CREATE TABLE IF NOT EXISTS suppression(email TEXT PRIMARY KEY, reason TEXT DEFAULT '', created_at TEXT DEFAULT CURRENT_TIMESTAMP);`);
+if(!db.prepare("PRAGMA table_info(coaches)").all().some(c=>c.name==='phone'))db.exec("ALTER TABLE coaches ADD COLUMN phone TEXT DEFAULT ''");
 const query=(sql,...p)=>db.prepare(sql).all(...p), one=(sql,...p)=>db.prepare(sql).get(...p), run=(sql,...p)=>db.prepare(sql).run(...p);
 const hash=(x)=>crypto.createHash('sha256').update(x).digest('hex');
 function passwordHash(p,salt){return crypto.scryptSync(p,salt,64).toString('hex')}
@@ -33,6 +34,7 @@ function cookies(req){return Object.fromEntries((req.headers.cookie||'').split('
 function session(req){const token=cookies(req).sid;if(!token)return null;return one('SELECT * FROM sessions WHERE token_hash=? AND expires_at>?',hash(token),Date.now())}
 function clean(v,max=500){return String(v??'').trim().slice(0,max)}
 function requireText(v,label,max=500){let s=clean(v,max);if(!s)throw Error(label+' is required');return s}
+function phoneValid(v){return !v||(/^[+0-9().\- xext]{7,40}$/i.test(v)&&/[0-9]{7}/.test(v.replace(/\D/g,'')))}
 function emailValid(v){return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)}
 function safeUrl(v){if(!v)return '';const u=new URL(v);if(u.protocol!=='https:')throw Error('HTTPS URL required');if(u.username||u.password)throw Error('URL credentials not allowed');return u.href}
 function checkCsrf(req,s){if(req.headers['x-csrf-token']!==s.csrf)throw Error('Invalid CSRF token')}
@@ -53,9 +55,37 @@ if(p==='/api/dashboard')return json(res,200,{schools:one('SELECT COUNT(*) n FROM
 if(p==='/api/schools'&&method==='GET')return json(res,200,query('SELECT * FROM schools ORDER BY name LIMIT 5000'));
 if(p==='/api/schools'&&method==='POST'){const b=await body(req),division=clean(b.division);if(!['FBS','FCS','D2','D3'].includes(division))throw Error('Invalid division');const r=run('INSERT INTO schools(name,division,conference,state,staff_url) VALUES(?,?,?,?,?)',requireText(b.name,'School name',200),division,clean(b.conference),clean(b.state,30),safeUrl(b.staff_url));return json(res,201,{id:Number(r.lastInsertRowid)})}
 if(p==='/api/schools/import'&&method==='POST'){const b=await body(req);if(!Array.isArray(b.rows)||b.rows.length>1500)throw Error('Import up to 1500 rows');let count=0;for(const x of b.rows){if(!['FBS','FCS','D2','D3'].includes(x.division)||!clean(x.name))continue;run('INSERT OR IGNORE INTO schools(name,division,conference,state,staff_url) VALUES(?,?,?,?,?)',clean(x.name,200),x.division,clean(x.conference),clean(x.state,30),x.staff_url?safeUrl(x.staff_url):'');count++}return json(res,200,{processed:count})}
+if(p==='/api/coaches/import'&&method==='POST'){
+ const b=await body(req);
+ if(!Array.isArray(b.rows)||!b.rows.length||b.rows.length>200)throw Error('Provide 1 to 200 coach rows');
+ const prepared=[],errors=[];
+ for(let i=0;i<b.rows.length;i++){
+  const x=b.rows[i]||{},name=clean(x.name,150),schoolName=clean(x.school,200),division=clean(x.division,10).toUpperCase(),email=clean(x.email,254).toLowerCase(),phone=clean(x.phone,40);
+  if(!name||!schoolName){errors.push('Row '+(i+1)+': school and coach name required');continue}
+  const matches=division?query('SELECT id FROM schools WHERE lower(name)=lower(?) AND division=?',schoolName,division):query('SELECT id FROM schools WHERE lower(name)=lower(?)',schoolName);
+  if(matches.length!==1){errors.push('Row '+(i+1)+': school not uniquely matched: '+schoolName);continue}
+  if(email&&!emailValid(email)){errors.push('Row '+(i+1)+': invalid email');continue}
+  if(!phoneValid(phone)){errors.push('Row '+(i+1)+': invalid phone');continue}
+  try{prepared.push({school_id:matches[0].id,name,role:clean(x.role,200),email,phone,x_url:safeUrl(clean(x.x_url)),instagram_url:safeUrl(clean(x.instagram_url)),source_url:safeUrl(clean(x.source_url)),notes:clean(x.notes,2000)})}
+  catch(e){errors.push('Row '+(i+1)+': '+e.message)}
+ }
+ if(errors.length)return json(res,400,{error:errors.slice(0,12).join('; ')+(errors.length>12?'; and more errors':'')});
+ let imported=0,skipped=0;
+ db.exec('BEGIN IMMEDIATE');
+ try{
+  for(const x of prepared){
+   const existing=query('SELECT id,name,email FROM coaches WHERE school_id=?',x.school_id).some(c=>c.name.toLowerCase()===x.name.toLowerCase()&&(c.email||'').toLowerCase()===x.email);
+   if(existing){skipped++;continue}
+   run('INSERT INTO coaches(school_id,name,role,email,phone,x_url,instagram_url,source_url,notes) VALUES(?,?,?,?,?,?,?,?,?)',x.school_id,x.name,x.role,x.email,x.phone,x.x_url,x.instagram_url,x.source_url,x.notes);
+   imported++;
+  }
+  db.exec('COMMIT');
+ }catch(e){db.exec('ROLLBACK');throw e}
+ return json(res,200,{imported,skipped});
+}
 if(p==='/api/coaches'&&method==='GET')return json(res,200,query('SELECT c.*,s.name school,s.division FROM coaches c JOIN schools s ON s.id=c.school_id ORDER BY c.id DESC LIMIT 10000'));
-if(p==='/api/coaches'&&method==='POST'){const b=await body(req);if(!one('SELECT id FROM schools WHERE id=?',Number(b.school_id)))throw Error('School required');const email=clean(b.email,254).toLowerCase();if(email&&!emailValid(email))throw Error('Invalid email');const r=run('INSERT INTO coaches(school_id,name,role,email,x_url,instagram_url,source_url,notes) VALUES(?,?,?,?,?,?,?,?)',Number(b.school_id),requireText(b.name,'Coach name',150),clean(b.role),email,safeUrl(b.x_url),safeUrl(b.instagram_url),safeUrl(b.source_url),clean(b.notes,2000));return json(res,201,{id:Number(r.lastInsertRowid)})}
-if(/^\/api\/coaches\/\d+$/.test(p)&&method==='PATCH'){const id=Number(p.split('/')[3]),b=await body(req);const c=one('SELECT * FROM coaches WHERE id=?',id);if(!c)throw Error('Coach not found');const fields=['name','role','email','x_url','instagram_url','source_url','notes','status','opted_out'];const values={...c};for(const k of fields)if(Object.hasOwn(b,k))values[k]=b[k];if(!['unverified','verified','stale'].includes(values.status))throw Error('Invalid status');if(values.email&&!emailValid(values.email))throw Error('Invalid email');for(const k of ['x_url','instagram_url','source_url'])values[k]=safeUrl(values[k]);run('UPDATE coaches SET name=?,role=?,email=?,x_url=?,instagram_url=?,source_url=?,notes=?,status=?,opted_out=?,verified_at=? WHERE id=?',clean(values.name),clean(values.role),clean(values.email).toLowerCase(),values.x_url,values.instagram_url,values.source_url,clean(values.notes,2000),values.status,Number(Boolean(values.opted_out)),values.status==='verified'?new Date().toISOString():'',id);return json(res,200,{ok:true})}
+if(p==='/api/coaches'&&method==='POST'){const b=await body(req);if(!one('SELECT id FROM schools WHERE id=?',Number(b.school_id)))throw Error('School required');const email=clean(b.email,254).toLowerCase();if(email&&!emailValid(email))throw Error('Invalid email');const phone=clean(b.phone,40);if(!phoneValid(phone))throw Error('Invalid phone');const r=run('INSERT INTO coaches(school_id,name,role,email,phone,x_url,instagram_url,source_url,notes) VALUES(?,?,?,?,?,?,?,?,?)',Number(b.school_id),requireText(b.name,'Coach name',150),clean(b.role),email,phone,safeUrl(b.x_url),safeUrl(b.instagram_url),safeUrl(b.source_url),clean(b.notes,2000));return json(res,201,{id:Number(r.lastInsertRowid)})}
+if(/^\/api\/coaches\/\d+$/.test(p)&&method==='PATCH'){const id=Number(p.split('/')[3]),b=await body(req);const c=one('SELECT * FROM coaches WHERE id=?',id);if(!c)throw Error('Coach not found');const fields=['name','role','email','phone','x_url','instagram_url','source_url','notes','status','opted_out'];const values={...c};for(const k of fields)if(Object.hasOwn(b,k))values[k]=b[k];if(!['unverified','verified','stale'].includes(values.status))throw Error('Invalid status');if(values.email&&!emailValid(values.email))throw Error('Invalid email');if(!phoneValid(clean(values.phone,40)))throw Error('Invalid phone');for(const k of ['x_url','instagram_url','source_url'])values[k]=safeUrl(values[k]);run('UPDATE coaches SET name=?,role=?,email=?,phone=?,x_url=?,instagram_url=?,source_url=?,notes=?,status=?,opted_out=?,verified_at=? WHERE id=?',clean(values.name),clean(values.role),clean(values.email).toLowerCase(),clean(values.phone,40),values.x_url,values.instagram_url,values.source_url,clean(values.notes,2000),values.status,Number(Boolean(values.opted_out)),values.status==='verified'?new Date().toISOString():'',id);return json(res,200,{ok:true})}
 if(p==='/api/collect'&&method==='POST'){const b=await body(req),school=one('SELECT * FROM schools WHERE id=?',Number(b.school_id));if(!school)throw Error('School required');const url=safeUrl(b.url||school.staff_url);if(!url)throw Error('Staff directory URL required');const results=await collect(url);for(const email of results.emails)run('INSERT OR IGNORE INTO contact_candidates(school_id,email,source_url) VALUES(?,?,?)',school.id,email,url);for(const social of results.social){const k=social.includes('instagram.com')?'instagram_url':'x_url';run(`INSERT OR IGNORE INTO contact_candidates(school_id,${k},source_url) VALUES(?,?,?)`,school.id,social,url)}return json(res,200,{emails:results.emails.length,social:results.social.length,note:'Candidates require manual matching to a named coach and verification.'})}
 if(p==='/api/candidates'&&method==='GET')return json(res,200,query('SELECT cc.*,s.name school FROM contact_candidates cc JOIN schools s ON s.id=cc.school_id ORDER BY cc.id DESC LIMIT 1000'));
 if(p==='/api/candidates/resolve'&&method==='POST'){const b=await body(req),candidate=one('SELECT * FROM contact_candidates WHERE id=?',Number(b.id));if(!candidate)throw Error('Candidate not found');if(b.action==='reject'){run("UPDATE contact_candidates SET status='rejected' WHERE id=?",candidate.id);return json(res,200,{ok:true})}const name=requireText(b.name,'Coach name');const r=run('INSERT INTO coaches(school_id,name,role,email,x_url,instagram_url,source_url,status) VALUES(?,?,?,?,?,?,?,?)',candidate.school_id,name,clean(b.role),candidate.email,candidate.x_url,candidate.instagram_url,candidate.source_url,'unverified');run("UPDATE contact_candidates SET status='imported' WHERE id=?",candidate.id);return json(res,200,{coach_id:Number(r.lastInsertRowid)})}
