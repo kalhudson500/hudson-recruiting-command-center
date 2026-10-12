@@ -38,12 +38,32 @@ export function robotsAllowed(text,url){
 }
 export function parseCoachProfile(html,url,name){
  const $=load(html),block=$('.sidearm-coach-bio-header-details').first();
- if(!block.length||normalize(block.find('[class*="name"]').first().text())!==normalize(name))return null;
- const fields={};block.find('dt').each((_,dt)=>{const label=$(dt).text().trim().toLowerCase(),value=$(dt).next('dd');if(label==='email')fields.email=value.find('a[href^="mailto:"]').attr('href')?.slice(7).split('?')[0].toLowerCase()||'';if(label==='phone')fields.phone=value.text().trim();if(label==='twitter'||label==='x')fields.x_url=value.find('a[href]').attr('href')||'';});
+ const titleMatches=normalize($('title').text()).startsWith(normalize(name));
+ const blockMatches=block.length&&normalize(block.find('[class*="name"]').first().text())===normalize(name);
+ if(!blockMatches&&!titleMatches)return null;
+ const fields={};if(blockMatches)block.find('dt').each((_,dt)=>{const label=$(dt).text().trim().toLowerCase(),value=$(dt).next('dd');if(label==='email')fields.email=value.find('a[href^="mailto:"]').attr('href')?.slice(7).split('?')[0].toLowerCase()||'';if(label==='phone')fields.phone=value.text().trim();if(label==='twitter'||label==='x')fields.x_url=value.find('a[href]').attr('href')||'';});
+ const namedLinks=$('a[href][aria-label]').filter((_,a)=>{const label=$(a).attr('aria-label')||'';const match=label.match(/^Visit (.+) (?:Twitter|X) profile page$/i);return match&&normalize(match[1])===normalize(name);}).map((_,a)=>$(a).attr('href')).get();
+ const profiles=[...new Set(namedLinks)];if(profiles.length===1&&!fields.x_url)fields.x_url=profiles[0];
  if(fields.email&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(fields.email))delete fields.email;
  if(fields.x_url){if(/^https?:\/\/(www\.)?(x|twitter)\.com\/[\w]{1,15}\/?$/i.test(fields.x_url))fields.x_url='https://x.com/'+fields.x_url.split('/').filter(Boolean).at(-1);else delete fields.x_url;}
  if(fields.phone&&!/^(?:\+1[ .-]?)?\(?\d{3}\)?[ .-]\d{3}[ .-]\d{4}(?:\s*(?:ext\.?|x)\s*\d+)?$/i.test(fields.phone))delete fields.phone;
  return {...fields,profile_source_url:url};
+}
+export function directoryIdentity(s){
+ const aliases={
+  'Miami (FL)':['University of Miami','Miami'], 'Miami (OH)':['Miami University','Miami'],
+  'LSU':['Louisiana State University','LSU'], 'Ole Miss':['University of Mississippi','Ole Miss'],
+  'USC':['University of Southern California','USC'], 'UCLA':['University of California Los Angeles','UCLA'],
+  'UCF':['University of Central Florida','UCF'], 'UConn':['University of Connecticut','UConn'],
+  'UTSA':['University of Texas at San Antonio','UTSA'], 'UTEP':['University of Texas at El Paso','UTEP'],
+  'UNLV':['University of Nevada Las Vegas','UNLV'], 'UAB':['University of Alabama at Birmingham','UAB'],
+  'SMU':['Southern Methodist University','SMU'], 'TCU':['Texas Christian University','TCU'],
+  'BYU':['Brigham Young University','BYU'], 'FIU':['Florida International University','FIU'],
+  'FAU':['Florida Atlantic University','FAU'], 'UMass':['University of Massachusetts Amherst','UMass'],
+  'NC State':['North Carolina State University','NC State'], 'Pitt':['University of Pittsburgh','Pitt'],
+  'Army':['United States Military Academy','Army'], 'Navy':['United States Naval Academy','Navy']
+ };
+ const pair=aliases[s.name];return {query:pair?pair[0]:s.name,candidateNames:pair?[...new Set(pair)]:[s.name],campusNames:pair?[pair[0]]:[s.name]};
 }
 export function installCollector({db,query,one,run,inspectUrl}){
  db.exec(`CREATE TABLE IF NOT EXISTS collection_state(id INTEGER PRIMARY KEY CHECK(id=1),enabled INTEGER DEFAULT 0); INSERT OR IGNORE INTO collection_state(id) VALUES(1);
@@ -73,21 +93,22 @@ export function installCollector({db,query,one,run,inspectUrl}){
  async function search(q,count=8){
   const u=new URL('https://api.search.brave.com/res/v1/web/search');u.searchParams.set('q',q);u.searchParams.set('count',String(count));
   const r=await fetch(u,{headers:{'X-Subscription-Token':process.env.BRAVE_SEARCH_API_KEY},signal:AbortSignal.timeout(15000)});
-  if(!r.ok)throw Error('Search HTTP '+r.status);return (await r.json()).web?.results||[];
+  if(!r.ok){if([401,402,403].includes(r.status))run('UPDATE collection_state SET enabled=0 WHERE id=1');throw Error('Search HTTP '+r.status);}return (await r.json()).web?.results||[];
  }
  async function discover(s){
   if(!process.env.BRAVE_SEARCH_API_KEY)throw Error('Missing BRAVE_SEARCH_API_KEY for directory discovery');
-  const results=await search(s.name+' '+s.division+' official football coaching staff');
-  const candidates=results.filter(x=>{try{const u=new URL(x.url);return u.protocol==='https:'&&/\/sports\/(football|fball)\/(coaches|staff)|\/staff-directory|\/coaches\/?$/i.test(u.pathname)&&! /\/20\d{2}(?:[/-]|$)/.test(u.pathname.replace('/'+new Date().getUTCFullYear(),''))&&normalize(x.title).includes(normalize(s.name));}catch{return false}});
+  const identity=directoryIdentity(s);
+  const results=await search(identity.query+' '+s.division+' official football coaching staff');
+  const candidates=results.filter(x=>{try{const u=new URL(x.url);return u.protocol==='https:'&&/\/sports\/(football|fball)\/(coaches|staff)|\/staff-directory|\/coaches\/?$/i.test(u.pathname)&&! /\/20\d{2}(?:[/-]|$)/.test(u.pathname.replace('/'+new Date().getUTCFullYear(),''))&&identity.candidateNames.some(name=>normalize(x.title).includes(normalize(name)));}catch{return false}});
   if(!candidates.length)throw Error('No current named football directory found; needs review');
   // Search university-owned pages separately: athletics results often crowd them out.
-  const institutions=[...results.filter(x=>{try{return new URL(x.url).hostname.endsWith('.edu')}catch{return false}}),...await search(s.name+' official athletics site:edu',5)];
+  const institutions=[...results.filter(x=>{try{return new URL(x.url).hostname.endsWith('.edu')}catch{return false}}),...await search(identity.query+' official athletics site:edu',5)];
   const anchors=new Map(),seen=new Set();
   for(const institution of institutions){
    if(seen.has(institution.url))continue;seen.add(institution.url);
    try{
     const page=await fetchPage(institution.url),host=new URL(page.url).hostname,$=load(page.html);
-    if(!host.endsWith('.edu')||!normalize($('title').text()).includes(normalize(s.name)))continue;
+    if(!host.endsWith('.edu')||!identity.campusNames.some(name=>normalize($('title').text()).includes(normalize(name))))continue;
     anchors.set(host.replace(/^www\./,''),page.url);
     $('a[href]').each((_,a)=>{try{const target=new URL($(a).attr('href'),page.url);if(target.protocol==='https:'&&/athletic/i.test($(a).text()))anchors.set(target.hostname.replace(/^www\./,''),page.url);}catch{}});
    }catch{} // An unavailable campus page must not discard other ownership evidence.

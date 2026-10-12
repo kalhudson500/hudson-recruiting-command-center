@@ -63,3 +63,14 @@ test('profile contacts require the exact named coach header and labeled fields',
  const html='<div class="sidearm-coach-bio-header-details"><h1 class="sidearm-coach-bio-name">First Coach</h1><dl><dt>Email</dt><dd><a href="mailto:first@example.edu">Email</a></dd><dt>Twitter</dt><dd><a href="https://twitter.com/FirstCoach">X</a></dd></dl></div><footer><a href="mailto:team@example.edu">Team</a></footer>';
  assert.equal(parseCoachProfile(html,url,'First Coach').email,'first@example.edu');assert.equal(parseCoachProfile(html,url,'First Coach').x_url,'https://x.com/FirstCoach');assert.equal(parseCoachProfile(html,url,'Wrong Coach'),null);
 });
+
+import {directoryIdentity} from '../collector.js';
+test('Miami campuses require different institution ownership evidence',()=>{
+ assert.deepEqual(directoryIdentity({name:'Miami (FL)'}).campusNames,['University of Miami']);
+ assert.deepEqual(directoryIdentity({name:'Miami (OH)'}).campusNames,['Miami University']);
+ assert.equal(directoryIdentity({name:'UConn'}).query,'University of Connecticut');
+});
+test('modern profile X links are matched by named accessible label, never team links',()=>{
+ const html='<title>First Coach - Head Coach - Example University</title><a href="https://twitter.com/ExampleTeam" aria-label="Team Twitter">Team</a><a href="https://twitter.com/FirstCoach" aria-label="Visit First Coach Twitter profile page">X</a>';
+ assert.equal(parseCoachProfile(html,url,'First Coach').x_url,'https://x.com/FirstCoach');assert.equal(parseCoachProfile(html,url,'Wrong Coach'),null);
+});
