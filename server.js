@@ -22,6 +22,7 @@ CREATE TABLE IF NOT EXISTS activities(id INTEGER PRIMARY KEY, coach_id INTEGER R
 CREATE TABLE IF NOT EXISTS suppression(email TEXT PRIMARY KEY, reason TEXT DEFAULT '', created_at TEXT DEFAULT CURRENT_TIMESTAMP);`);
 if(!db.prepare("PRAGMA table_info(coaches)").all().some(c=>c.name==='phone'))db.exec("ALTER TABLE coaches ADD COLUMN phone TEXT DEFAULT ''");
 db.exec("CREATE TABLE IF NOT EXISTS directory_scans(school_id INTEGER PRIMARY KEY REFERENCES schools(id) ON DELETE CASCADE, source_url TEXT NOT NULL, status TEXT NOT NULL, emails INTEGER DEFAULT 0, social INTEGER DEFAULT 0, scanned_at TEXT DEFAULT CURRENT_TIMESTAMP, error TEXT DEFAULT '')");
+db.exec("CREATE TABLE IF NOT EXISTS directory_discovery(school_id INTEGER PRIMARY KEY REFERENCES schools(id) ON DELETE CASCADE, suggested_url TEXT DEFAULT '', status TEXT NOT NULL DEFAULT 'pending', checked_at TEXT DEFAULT CURRENT_TIMESTAMP, error TEXT DEFAULT '')");
 const query=(sql,...p)=>db.prepare(sql).all(...p), one=(sql,...p)=>db.prepare(sql).get(...p), run=(sql,...p)=>db.prepare(sql).run(...p);
 const hash=(x)=>crypto.createHash('sha256').update(x).digest('hex');
 function passwordHash(p,salt){return crypto.scryptSync(p,salt,64).toString('hex')}
@@ -56,6 +57,55 @@ if(p==='/api/dashboard')return json(res,200,{schools:one('SELECT COUNT(*) n FROM
 if(p==='/api/schools'&&method==='GET')return json(res,200,query('SELECT * FROM schools ORDER BY name LIMIT 5000'));
 if(p==='/api/schools'&&method==='POST'){const b=await body(req),division=clean(b.division);if(!['FBS','FCS','D2','D3'].includes(division))throw Error('Invalid division');const r=run('INSERT INTO schools(name,division,conference,state,staff_url) VALUES(?,?,?,?,?)',requireText(b.name,'School name',200),division,clean(b.conference),clean(b.state,30),safeUrl(b.staff_url));return json(res,201,{id:Number(r.lastInsertRowid)})}
 if(p==='/api/schools/import'&&method==='POST'){const b=await body(req);if(!Array.isArray(b.rows)||b.rows.length>1500)throw Error('Import up to 1500 rows');let count=0;for(const x of b.rows){if(!['FBS','FCS','D2','D3'].includes(x.division)||!clean(x.name))continue;run('INSERT OR IGNORE INTO schools(name,division,conference,state,staff_url) VALUES(?,?,?,?,?)',clean(x.name,200),x.division,clean(x.conference),clean(x.state,30),x.staff_url?safeUrl(x.staff_url):'');count++}return json(res,200,{processed:count})}
+if(p==='/api/directory-discovery/status'&&method==='GET'){
+ return json(res,200,{missing:one("SELECT COUNT(*) n FROM schools WHERE staff_url=''").n,review:one("SELECT COUNT(*) n FROM directory_discovery WHERE status='review'").n,attempted:one("SELECT COUNT(*) n FROM directory_discovery").n,configured:Boolean(process.env.BRAVE_SEARCH_API_KEY)});
+}
+if(p==='/api/directory-discovery/suggestions'&&method==='GET'){
+ return json(res,200,query("SELECT d.school_id,s.name,s.division,d.suggested_url,d.checked_at FROM directory_discovery d JOIN schools s ON s.id=d.school_id WHERE d.status='review' ORDER BY d.checked_at DESC LIMIT 100"));
+}
+if(p==='/api/directory-discovery/batch'&&method==='POST'){
+ if(!process.env.BRAVE_SEARCH_API_KEY)return json(res,400,{error:'Set BRAVE_SEARCH_API_KEY in Render environment to enable official directory discovery.'});
+ const b=await body(req),limit=Math.min(5,Math.max(1,Number(b.limit)||3));
+ const targets=query("SELECT s.id,s.name,s.division FROM schools s LEFT JOIN directory_discovery d ON d.school_id=s.id WHERE s.staff_url='' AND d.school_id IS NULL ORDER BY s.id LIMIT ?",limit);
+ let suggestions=0,failed=0;
+ for(const school of targets){
+  try{
+   const search=new URL('https://api.search.brave.com/res/v1/web/search');
+   search.searchParams.set('q',school.name+' football coaching staff athletics official site');
+   search.searchParams.set('count','5');
+   const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),9000);
+   let data;
+   try{
+    const response=await fetch(search,{headers:{'X-Subscription-Token':process.env.BRAVE_SEARCH_API_KEY,'Accept':'application/json'},signal:controller.signal,redirect:'manual'});
+    if(!response.ok)throw Error('Search API HTTP '+response.status);
+    data=await response.json();
+   }finally{clearTimeout(timeout)}
+   const candidates=(data.web?.results||[]).map(x=>x.url).filter(Boolean).filter(x=>{
+    try{
+     const u=new URL(x);
+     return u.protocol==='https:'&&!u.username&&!u.password&&(!u.port||u.port==='443')&&(/\/sports\/football\/(coaches|staff)|\/sports\/football\/roster\/coaches|\/staff-directory/i.test(u.pathname))&&!/^(www\.)?(facebook|instagram|x|twitter|youtube|wikipedia)\.com$/i.test(u.hostname);
+    }catch{return false}
+   });
+   const url=candidates[0]||'';
+   run("INSERT INTO directory_discovery(school_id,suggested_url,status,error) VALUES(?,?,?,?)",school.id,url,url?'review':'no_match','');
+   if(url)suggestions++;
+  }catch(e){
+   run("INSERT INTO directory_discovery(school_id,status,error) VALUES(?,?,?)",school.id,'error',clean(e.message,200));
+   failed++;
+  }
+ }
+ return json(res,200,{checked:targets.length,suggestions,failed,note:'Search results are suggestions only. Confirm the correct official athletics site before approving.'});
+}
+if(p==='/api/directory-discovery/approve'&&method==='POST'){
+ const b=await body(req),id=Number(b.school_id);
+ const suggestion=one("SELECT * FROM directory_discovery WHERE school_id=? AND status='review'",id);
+ if(!suggestion)throw Error('No pending suggestion for school');
+ const url=safeUrl(clean(b.url||suggestion.suggested_url,1000));
+ if(!url)throw Error('Directory URL required');
+ run("UPDATE schools SET staff_url=? WHERE id=? AND staff_url=''",url,id);
+ run("UPDATE directory_discovery SET status='approved',suggested_url=?,checked_at=CURRENT_TIMESTAMP WHERE school_id=?",url,id);
+ return json(res,200,{ok:true});
+}
 if(p==='/api/directory-scan/status'&&method==='GET'){
  const counts=one("SELECT COUNT(*) total, SUM(CASE WHEN staff_url!='' THEN 1 ELSE 0 END) with_url FROM schools");
  const scans=one("SELECT COUNT(*) attempted, SUM(CASE WHEN status='ok' THEN 1 ELSE 0 END) successful FROM directory_scans");
