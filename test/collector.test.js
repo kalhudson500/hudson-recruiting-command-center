@@ -46,3 +46,20 @@ test('two named coaches can share an explicitly listed public football-office em
  const rows=parseDirectory('<table>'+row('First Coach','football@example.edu')+row('Second Coach','football@example.edu')+'</table>',url);
  assert.equal(rows.length,2);assert.equal(rows[0].email,rows[1].email);assert.equal(rows[0].uncertain,false);
 });
+
+test('photo-only links never hide the named coach in another cell',()=>{
+ const html='<table><tr><td><a href="/sports/football/roster/coaches/first/1"><img></a></td><td><a href="/sports/football/roster/coaches/first/1">First Coach</a></td><td>Head Coach</td><td><a href="mailto:first@example.edu">Email</a></td></tr></table>';
+ const rows=parseDirectory(html,url);assert.equal(rows.length,1);assert.equal(rows[0].role,'Head Coach');assert.equal(rows[0].profile_url,'https://example.edu/sports/football/roster/coaches/first/1');
+});
+
+import {robotsAllowed,parseCoachProfile} from '../collector.js';
+test('robots wildcard, allow exception, and bot-specific rules',()=>{
+ const rules='User-agent: *\nDisallow: /sports/*/roster/\nAllow: /sports/football/roster/coaches/';
+ assert.equal(robotsAllowed(rules,'https://example.edu/sports/football/roster/'),false);
+ assert.equal(robotsAllowed(rules,'https://example.edu/sports/football/roster/coaches/first/1'),true);
+ assert.equal(robotsAllowed('User-agent: *\nDisallow: /\nUser-agent: HudsonRecruitingDirectory\nAllow: /',url),true);
+});
+test('profile contacts require the exact named coach header and labeled fields',()=>{
+ const html='<div class="sidearm-coach-bio-header-details"><h1 class="sidearm-coach-bio-name">First Coach</h1><dl><dt>Email</dt><dd><a href="mailto:first@example.edu">Email</a></dd><dt>Twitter</dt><dd><a href="https://twitter.com/FirstCoach">X</a></dd></dl></div><footer><a href="mailto:team@example.edu">Team</a></footer>';
+ assert.equal(parseCoachProfile(html,url,'First Coach').email,'first@example.edu');assert.equal(parseCoachProfile(html,url,'First Coach').x_url,'https://x.com/FirstCoach');assert.equal(parseCoachProfile(html,url,'Wrong Coach'),null);
+});
