@@ -1,6 +1,7 @@
+import {isFootballCoachRole} from './public/coach-roles.js';
 import { load } from 'cheerio';
 import { installXEnrichment } from './x-enrichment.js';
-export const normalize = s => String(s||'').normalize('NFKD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]/g,'');
+export const normalize = s => String(s||'').replace(/\s+['’]\d{2}\s*$/, '').normalize('NFKD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]/g,'');
 export function parseDirectory(html,url){
  const $=load(html); $('script,style,nav,footer,header').remove(); const contacts=[];
  const footballPage=/\/sports\/(football|fball)\//i.test(new URL(url).pathname);
@@ -11,7 +12,8 @@ export function parseDirectory(html,url){
   const name=named.first().text().trim();
   const nameCell=row.find('th[scope="row"],td').filter((_,cell)=>normalize($(cell).text())===normalize(name)).first();
   const role=(row.find('[class*="position"],[class*="title"]').first().text()||nameCell.next('td').text()).trim();
-  if(!/^[\p{L} .’'\-]{3,90}$/u.test(name)||name.split(/\s+/).length<2||!/coach|coordinator|football|recruit|personnel|operations|assistant/i.test(role))return;
+  const plainName=name.replace(/\s+['’]\d{2}\s*$/, '');
+  if(!/^[\p{L} .’'\-]{3,90}$/u.test(plainName)||plainName.split(/\s+/).length<2||(!isFootballCoachRole(role)&&!/coach|coordinator|football|recruit|personnel|operations|assistant/i.test(role)))return;
   const emails=[...new Set(row.find('a[href^="mailto:"]').map((_,a)=>$(a).attr('href').slice(7).split('?')[0].trim().toLowerCase()).get())].filter(e=>/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e));
   const phone=text.match(/(?:\+1[ .-]?)?\(?\d{3}\)?[ .-]\d{3}[ .-]\d{4}(?:\s*(?:ext\.?|x)\s*\d+)?/i)?.[0]||'';
   const socials=row.find('a[href]').map((_,a)=>$(a).attr('href')).get().filter(h=>/^https?:\/\/(www\.)?(twitter|x)\.com\/[\w]{1,15}\/?$/i.test(h));
@@ -81,6 +83,8 @@ export function installCollector({db,query,one,run,inspectUrl}){
  db.exec("CREATE TABLE IF NOT EXISTS collection_profiles(id INTEGER PRIMARY KEY,school_id INTEGER NOT NULL REFERENCES schools(id),coach_id INTEGER NOT NULL REFERENCES coaches(id),profile_url TEXT NOT NULL,status TEXT NOT NULL DEFAULT 'pending',checked_at TEXT DEFAULT '',error TEXT DEFAULT '',UNIQUE(coach_id,profile_url))");
  if(!query('PRAGMA table_info(coaches)').some(c=>c.name==='instagram_url'))db.exec("ALTER TABLE coaches ADD COLUMN instagram_url TEXT DEFAULT ''");
  if(!query('PRAGMA table_info(coaches)').some(c=>c.name==='manual_lock'))db.exec('ALTER TABLE coaches ADD COLUMN manual_lock INTEGER DEFAULT 0');
+ db.exec("CREATE TABLE IF NOT EXISTS collection_coaching_refresh(school_id INTEGER PRIMARY KEY REFERENCES schools(id),priority INTEGER NOT NULL DEFAULT 0); CREATE TABLE IF NOT EXISTS collection_repairs(key TEXT PRIMARY KEY,created_at TEXT DEFAULT CURRENT_TIMESTAMP)");
+ if(!one("SELECT key FROM collection_repairs WHERE key='coaching_names_positions_v1'")){db.exec('BEGIN IMMEDIATE');try{run('INSERT OR IGNORE INTO collection_coaching_refresh(school_id) SELECT id FROM schools');run("INSERT INTO collection_repairs(key) VALUES('coaching_names_positions_v1')");if(one('SELECT COUNT(*) n FROM collection_coaching_refresh').n)run('UPDATE collection_state SET enabled=1 WHERE id=1');db.exec('COMMIT');}catch(e){db.exec('ROLLBACK');throw e;}}
  let busy=false,schoolSteps=0;const robotsCache=new Map();
  async function fetchPage(url){
   for(let redirects=0;redirects<5;redirects++){
@@ -150,6 +154,7 @@ export function installCollector({db,query,one,run,inspectUrl}){
    run("INSERT OR REPLACE INTO collection_progress(school_id,status,source_url,checked_at,imported,error) VALUES(?,?,?,?,?,?)",s.id,review?'review':'complete',page.url,now,one("SELECT COUNT(DISTINCT coach_id) n FROM collection_evidence WHERE school_id=? AND decision='imported'",s.id).n,review?review+' conflicting contacts need review':'');db.exec('COMMIT');
    }catch(e){db.exec('ROLLBACK');throw e;}
   }catch(e){run("INSERT OR REPLACE INTO collection_progress(school_id,status,source_url,error) VALUES(?,'review',?,?)",s.id,source,String(e.message).slice(0,400));}
+  run('DELETE FROM collection_coaching_refresh WHERE school_id=?',s.id);
  }
  async function processProfile(job){
   const coach=one('SELECT * FROM coaches WHERE id=?',job.coach_id),school=one('SELECT * FROM schools WHERE id=?',job.school_id);
@@ -168,12 +173,12 @@ export function installCollector({db,query,one,run,inspectUrl}){
   }catch(e){run("UPDATE collection_profiles SET status='review',checked_at=CURRENT_TIMESTAMP,error=? WHERE id=?",String(e.message).slice(0,400),job.id);}
  }
  async function tick(){if(busy||!one('SELECT enabled FROM collection_state WHERE id=1').enabled)return;busy=true;try{
-  const s=one("SELECT s.* FROM schools s LEFT JOIN collection_progress p ON p.school_id=s.id WHERE s.division IN ('FBS','FCS','D2','D3') AND p.school_id IS NULL AND (s.staff_url!='' OR ?=1) ORDER BY s.id LIMIT 1",Number(Boolean(process.env.BRAVE_SEARCH_API_KEY)));
+  const s=one("SELECT s.* FROM schools s LEFT JOIN collection_progress p ON p.school_id=s.id LEFT JOIN collection_coaching_refresh q ON q.school_id=s.id WHERE s.division IN ('FBS','FCS','D2','D3') AND (p.school_id IS NULL OR q.school_id IS NOT NULL) AND (s.staff_url!='' OR ?=1) ORDER BY COALESCE(q.priority,0) DESC, (SELECT COUNT(*) FROM coaches c WHERE c.school_id=s.id AND lower(c.role) LIKE '%head%coach%' AND lower(c.role) NOT LIKE '%strength%' AND lower(c.role) NOT LIKE '%assistant%'),s.id LIMIT 1",Number(Boolean(process.env.BRAVE_SEARCH_API_KEY)));
   const job=one("SELECT * FROM collection_profiles WHERE status='pending' ORDER BY id LIMIT 1");
   if(job&&(!s||schoolSteps>=3)){await processProfile(job);schoolSteps=0;}else if(s){await processSchool(s);schoolSteps++;}else run('UPDATE collection_state SET enabled=0 WHERE id=1');
  }finally{busy=false;}}
  const timer=setInterval(()=>tick().catch(e=>console.error('Collection worker:',e.message)),5000);timer.unref();
  const xEnrichment=installXEnrichment({db,query,one,run,fetchPage,checkRobots,search});
- return {startX:xEnrichment.start,pauseX:xEnrichment.pause,status:()=>({xEnrichment:xEnrichment.status(),enabled:!!one('SELECT enabled FROM collection_state WHERE id=1').enabled,busy,searchConfigured:!!process.env.BRAVE_SEARCH_API_KEY,total:one('SELECT COUNT(*) n FROM schools').n,counts:query('SELECT status,COUNT(*) count FROM collection_progress GROUP BY status'),profiles:query('SELECT status,COUNT(*) count FROM collection_profiles GROUP BY status'),schools:query('SELECT s.name,s.division,p.* FROM collection_progress p JOIN schools s ON s.id=p.school_id ORDER BY p.checked_at DESC'),review:query("SELECT e.*,s.name school FROM collection_evidence e JOIN schools s ON s.id=e.school_id WHERE e.decision='review' ORDER BY e.id DESC LIMIT 200")}),start:()=>{run('UPDATE collection_state SET enabled=1 WHERE id=1');void tick();},pause:()=>run('UPDATE collection_state SET enabled=0 WHERE id=1'),retry:()=>run("DELETE FROM collection_progress WHERE status='review'"),parseDirectory,fetchPage,discover};
+ return {refreshSchool:id=>{const s=one('SELECT * FROM schools WHERE id=?',Number(id));if(!s)throw Error('School not found');run('INSERT OR REPLACE INTO collection_coaching_refresh(school_id,priority) VALUES(?,1)',s.id);run('UPDATE collection_state SET enabled=1 WHERE id=1');void tick();},startX:xEnrichment.start,pauseX:xEnrichment.pause,status:()=>({coachingRefreshPending:one('SELECT COUNT(*) n FROM collection_coaching_refresh').n,xEnrichment:xEnrichment.status(),enabled:!!one('SELECT enabled FROM collection_state WHERE id=1').enabled,busy,searchConfigured:!!process.env.BRAVE_SEARCH_API_KEY,total:one('SELECT COUNT(*) n FROM schools').n,counts:query('SELECT status,COUNT(*) count FROM collection_progress GROUP BY status'),profiles:query('SELECT status,COUNT(*) count FROM collection_profiles GROUP BY status'),schools:query('SELECT s.name,s.division,p.* FROM collection_progress p JOIN schools s ON s.id=p.school_id ORDER BY p.checked_at DESC'),review:query("SELECT e.*,s.name school FROM collection_evidence e JOIN schools s ON s.id=e.school_id WHERE e.decision='review' ORDER BY e.id DESC LIMIT 200")}),start:()=>{run('UPDATE collection_state SET enabled=1 WHERE id=1');void tick();},pause:()=>run('UPDATE collection_state SET enabled=0 WHERE id=1'),retry:()=>run("DELETE FROM collection_progress WHERE status='review'"),parseDirectory,fetchPage,discover};
 }
 
