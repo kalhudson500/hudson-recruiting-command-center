@@ -17,4 +17,143 @@ if(p==='campaigns'){const campaigns=await api('campaigns');c.innerHTML=`<section
 if(p==='tracker'){const rows=await api('prospects');c.innerHTML=`<section class="panel"><h2>Add Recruiting Lead</h2><form id="leadForm" class="grid3"><label>Coach<select name="coach_id"><option value="">No coach</option>${optCoach()}</select></label><label>School<select name="school_id"><option value="">No school</option>${optSchool()}</select></label><label>Stage<select name="stage">${['not_contacted','contacted','replied','interested','visit','offer','closed'].map(x=>`<option>${x}</option>`).join('')}</select></label><label>Follow-up Date<input type="date" name="next_followup"></label><label>Notes<input name="notes"></label><label><span>&nbsp;</span><button style="width:100%">Save Lead</button></label></form></section><section class="panel"><h2>Recruiting Pipeline</h2><div class="tablewrap"><table><thead><tr><th>Coach</th><th>School</th><th>Stage</th><th>Follow-up</th><th>Notes</th><th>Update</th></tr></thead><tbody>${rows.map(x=>`<tr><td>${esc(x.coach)}</td><td>${esc(x.school)}</td><td><select id="stage${x.id}">${['not_contacted','contacted','replied','interested','visit','offer','closed'].map(s=>`<option ${x.stage===s?'selected':''}>${s}</option>`).join('')}</select></td><td><input id="date${x.id}" type="date" value="${esc(x.next_followup)}"></td><td><input id="notes${x.id}" value="${esc(x.notes)}"></td><td><button class="small" data-savelead="${x.id}">Save</button></td></tr>`).join('')}</tbody></table></div></section>`;$('#leadForm').onsubmit=e=>action(async()=>{e.preventDefault();const b=formdata(e.target);if(!b.coach_id)delete b.coach_id;if(!b.school_id)delete b.school_id;await api('prospects','POST',b);await show('tracker');notice('Lead saved')});c.onclick=e=>{const b=e.target.closest('[data-savelead]');if(b)action(async()=>{const id=b.dataset.savelead;await api('prospects/'+id,'PATCH',{stage:$('#stage'+id).value,notes:$('#notes'+id).value,next_followup:$('#date'+id).value});notice('Lead updated')})}}
 }
 async function preview(id){const d=await api('campaigns/'+id+'/preview'),c=d.campaign;$('#previewPanel').innerHTML=`<div class="panel"><h2>Approval & Sending: ${esc(c.title)}</h2><p>${d.recipients.length} recipients · <strong>${esc(c.status)}</strong></p><p class="help">Check personalized content and recipients. Sending requires a verified domain and provider API key. Send at most 25 per click; failures remain recorded and are never silently retried.</p><div class="scroll">${d.recipients.map(r=>`<details><summary>${esc(r.name)} — ${esc(r.school)} · ${esc(r.email)} · ${esc(r.state)}</summary><p><strong>${esc(r.subject)}</strong></p><pre>${esc(r.body)}</pre></details>`).join('')}</div><div class="actions">${c.status==='draft'?`<button id="approve">Approve Campaign</button>`:''}${c.status==='approved'?`<button id="sendBatch">Send Next Batch</button><select id="batchSize" style="width:90px"><option>5</option><option>10</option><option>25</option></select>`:''}</div></div>`;$('#approve')?.addEventListener('click',()=>action(async()=>{if(!confirm('Approve this campaign and its selected recipients for sending?'))return;await api('campaigns/'+id+'/approve','POST',{});await show('campaigns');await preview(id)}));$('#sendBatch')?.addEventListener('click',()=>action(async()=>{if(!confirm('Send up to '+$('#batchSize').value+' verified individual recruiting emails now?'))return;notice('Sending approved batch...');const r=await api('campaigns/'+id+'/send','POST',{limit:Number($('#batchSize').value)});await show('campaigns');await preview(id);notice(`Batch finished: ${r.sent} sent, ${r.failed} failed, ${r.skipped} skipped`)}))}
+
+// HUDSON RECRUITING - COPY AND EXPORT TOOLS
+function hudsonCopy(value) {
+  const text = String(value || '');
+  if (navigator.clipboard && window.isSecureContext) {
+    navigator.clipboard.writeText(text)
+      .then(() => notice('Copied!'))
+      .catch(() => hudsonCopyFallback(text));
+  } else {
+    hudsonCopyFallback(text);
+  }
+}
+
+function hudsonCopyFallback(text) {
+  const t = document.createElement('textarea');
+  t.value = text;
+  document.body.appendChild(t);
+  t.select();
+  const ok = document.execCommand('copy');
+  t.remove();
+  notice(ok ? 'Copied!' : 'Copy failed', !ok);
+}
+
+function hudsonCsv(value) {
+  return '"' + String(value ?? '')
+    .replace(/"/g, '""') + '"';
+}
+
+function hudsonExport(filename, headers, rows) {
+  const csv = [headers, ...rows]
+    .map(row => row.map(hudsonCsv).join(','))
+    .join('\r\n');
+  const blob = new Blob(['\uFEFF' + csv], {
+    type: 'text/csv;charset=utf-8'
+  });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function hudsonEnhance() {
+  const schoolRows = document.querySelector('#schoolRows');
+  const coachRows = document.querySelector('#coachRows');
+
+  if (schoolRows) {
+    const toolbar = document.querySelector('#schoolFilter')
+      ?.parentElement;
+
+    if (toolbar && !document.querySelector('#hudsonExportSchools')) {
+      const exportBtn = document.createElement('button');
+      exportBtn.id = 'hudsonExportSchools';
+      exportBtn.textContent = 'Export All Schools';
+      exportBtn.onclick = () => hudsonExport(
+        'hudson-651-schools.csv',
+        ['Name', 'Division', 'Conference', 'State', 'Directory'],
+        schools.map(s => [
+          s.name, s.division, s.conference,
+          s.state, s.staff_url
+        ])
+      );
+      toolbar.appendChild(exportBtn);
+
+      const copyBtn = document.createElement('button');
+      copyBtn.textContent = 'Copy All Schools';
+      copyBtn.onclick = () => hudsonCopy(
+        schools.map(s => [
+          s.name, s.division, s.conference,
+          s.state, s.staff_url
+        ].filter(Boolean).join(' | ')).join('\n')
+      );
+      toolbar.appendChild(copyBtn);
+    }
+
+    if (!schoolRows.dataset.hudsonEnhanced) {
+      schoolRows.dataset.hudsonEnhanced = 'yes';
+      const addButtons = () => {
+        schoolRows.querySelectorAll('tr').forEach(tr => {
+          if (tr.querySelector('.hudsonCopyRow')) return;
+          const td = document.createElement('td');
+          const btn = document.createElement('button');
+          btn.className = 'small secondary hudsonCopyRow';
+          btn.textContent = 'Copy';
+          btn.onclick = () => hudsonCopy(
+            Array.from(tr.cells)
+              .slice(0, 5)
+              .map(c => c.innerText.trim())
+              .join(' | ')
+          );
+          td.appendChild(btn);
+          tr.appendChild(td);
+        });
+      };
+      const head = schoolRows.closest('table')
+        ?.querySelector('thead tr');
+      if (head) {
+        const th = document.createElement('th');
+        th.textContent = 'Copy';
+        head.appendChild(th);
+      }
+      new MutationObserver(addButtons)
+        .observe(schoolRows, { childList: true });
+      addButtons();
+    }
+  }
+
+  if (coachRows) {
+    const toolbar = document.querySelector('#coachFilter')
+      ?.parentElement;
+
+    if (toolbar && !document.querySelector('#hudsonExportCoaches')) {
+      const btn = document.createElement('button');
+      btn.id = 'hudsonExportCoaches';
+      btn.textContent = 'Export Coaches';
+      btn.onclick = () => hudsonExport(
+        'hudson-coaches.csv',
+        ['Name', 'School', 'Role', 'Email', 'X', 'Instagram'],
+        coaches.map(c => [
+          c.name, c.school, c.role, c.email,
+          c.x_url, c.instagram_url
+        ])
+      );
+      toolbar.appendChild(btn);
+    }
+  }
+}
+
+const hudsonOriginalShow = show;
+show = async function(...args) {
+  const result = await hudsonOriginalShow(...args);
+  hudsonEnhance();
+  return result;
+};
+// END HUDSON TOOLS
+
 init().catch(e=>notice(e.message,true));
