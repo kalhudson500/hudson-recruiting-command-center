@@ -84,3 +84,17 @@ test('directory import queues durable profiles and profile enrichment fills only
  collector.start();await finish();assert.equal(one('SELECT email FROM coaches').email,'first@example.edu');assert.equal(one('SELECT status FROM collection_profiles').status,'complete');assert.equal(one("SELECT COUNT(*) n FROM collection_evidence WHERE decision='profile_matched'").n,1);collector.pause();
  }finally{global.fetch=originalFetch;}
 });
+
+test('official Instagram links are associated with the named coach without mixing X accounts',()=>{
+ const html='<title>First Coach - Coach</title><a href="https://twitter.com/FirstCoach" aria-label="Visit First Coach Twitter profile page">X</a><a href="https://instagram.com/first.coach" aria-label="Visit First Coach Instagram profile page">IG</a><a href="https://instagram.com/ExampleTeam" aria-label="Visit Example Team Instagram profile page">Team</a>';
+ const fields=parseCoachProfile(html,url,'First Coach');assert.equal(fields.x_url,'https://x.com/FirstCoach');assert.equal(fields.instagram_url,'https://www.instagram.com/first.coach');
+});
+test('pending profile checks progress while unscanned schools remain',async()=>{
+ const db=new DatabaseSync(':memory:');db.exec(`CREATE TABLE schools(id INTEGER PRIMARY KEY,name TEXT,division TEXT,staff_url TEXT);CREATE TABLE coaches(id INTEGER PRIMARY KEY,school_id INTEGER,name TEXT,role TEXT DEFAULT '',email TEXT DEFAULT '',phone TEXT DEFAULT '',x_url TEXT DEFAULT '',source_url TEXT DEFAULT '',status TEXT DEFAULT '',verified_at TEXT DEFAULT '');`);
+ for(let i=1;i<=4;i++)db.prepare('INSERT INTO schools VALUES(?,?,?,?)').run(i,'Fixture University '+i,'D2','https://example.edu/sports/football/coaches');
+ const query=(sql,...p)=>db.prepare(sql).all(...p),one=(sql,...p)=>db.prepare(sql).get(...p),run=(sql,...p)=>db.prepare(sql).run(...p),originalFetch=global.fetch;
+ global.fetch=async u=>new Response(String(u).endsWith('robots.txt')?'User-agent: *\nDisallow:':String(u).endsWith('/first/1')?'<title>First Coach - Coach</title><a href="https://twitter.com/FirstCoach" aria-label="Visit First Coach Twitter profile page">X</a>':'<table><tr><td><a href="/sports/football/roster/coaches/first/1">First Coach</a></td><td>Head Coach</td></tr></table>',{headers:{'content-type':'text/html'}});
+ try{const collector=installCollector({db,query,one,run,inspectUrl:async u=>u});for(let step=0;step<4;step++){collector.start();for(let i=0;i<100&&collector.status().busy;i++)await new Promise(r=>setTimeout(r,5));assert.equal(collector.status().busy,false);}
+ assert.equal(one('SELECT COUNT(*) n FROM collection_progress').n,3);assert.equal(one("SELECT COUNT(*) n FROM collection_profiles WHERE status='complete'").n,1);assert.equal(one('SELECT x_url FROM coaches WHERE id=1').x_url,'https://x.com/FirstCoach');collector.pause();
+ }finally{global.fetch=originalFetch;}
+});
