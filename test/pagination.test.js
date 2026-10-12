@@ -18,5 +18,7 @@ test('authenticated directory pagination reaches contacts beyond the previous 10
   const base='http://127.0.0.1:'+port+'/api/coaches';const first=await (await fetch(base+'?limit=1000&offset=0',{headers:{Cookie:cookie}})).json();assert.equal(first.length,1000);assert.equal(first[0].id,1);
   const last=await (await fetch(base+'?limit=1000&offset=10000',{headers:{Cookie:cookie}})).json();assert.equal(last.length,5);assert.equal(last.at(-1).id,10005);
   const all=await (await fetch(base,{headers:{Cookie:cookie}})).json();assert.equal(all.length,10005);
+  const module=await fetch('http://127.0.0.1:'+port+'/contact-directory.js');assert.equal(module.status,200);assert.match(module.headers.get('content-type'),/javascript/);
+  const evidence=await fetch('http://127.0.0.1:'+port+'/api/coaches/1/evidence',{headers:{Cookie:cookie}});assert.equal(evidence.status,200);assert.deepEqual(await evidence.json(),[]);
  }finally{app.kill();await once(app,'exit');rmSync(dir,{recursive:true,force:true});}
 });
