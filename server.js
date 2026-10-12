@@ -55,6 +55,33 @@ if(p==='/api/dashboard')return json(res,200,{schools:one('SELECT COUNT(*) n FROM
 if(p==='/api/schools'&&method==='GET')return json(res,200,query('SELECT * FROM schools ORDER BY name LIMIT 5000'));
 if(p==='/api/schools'&&method==='POST'){const b=await body(req),division=clean(b.division);if(!['FBS','FCS','D2','D3'].includes(division))throw Error('Invalid division');const r=run('INSERT INTO schools(name,division,conference,state,staff_url) VALUES(?,?,?,?,?)',requireText(b.name,'School name',200),division,clean(b.conference),clean(b.state,30),safeUrl(b.staff_url));return json(res,201,{id:Number(r.lastInsertRowid)})}
 if(p==='/api/schools/import'&&method==='POST'){const b=await body(req);if(!Array.isArray(b.rows)||b.rows.length>1500)throw Error('Import up to 1500 rows');let count=0;for(const x of b.rows){if(!['FBS','FCS','D2','D3'].includes(x.division)||!clean(x.name))continue;run('INSERT OR IGNORE INTO schools(name,division,conference,state,staff_url) VALUES(?,?,?,?,?)',clean(x.name,200),x.division,clean(x.conference),clean(x.state,30),x.staff_url?safeUrl(x.staff_url):'');count++}return json(res,200,{processed:count})}
+if(p==='/api/coaches/verify-batch'&&method==='POST'){
+ const b=await body(req),limit=Math.min(10,Math.max(1,Number(b.limit)||10));
+ const rows=query("SELECT c.id,c.name,c.email,c.source_url,s.staff_url FROM coaches c JOIN schools s ON s.id=c.school_id WHERE c.status!='verified' AND c.name!='' AND c.email!='' AND (c.source_url!='' OR s.staff_url!='') ORDER BY c.id LIMIT ?",limit);
+ let verified=0,unmatched=0,failed=0;
+ for(const c of rows){
+  try{
+   const url=c.source_url||c.staff_url;
+   await inspectUrl(url);
+   const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),9000);
+   let html='';
+   try{
+    const response=await fetch(url,{signal:controller.signal,redirect:'manual',headers:{'User-Agent':'HudsonRecruitingDirectory/1.0 (public staff verification)'}});
+    if(!response.ok||!String(response.headers.get('content-type')||'').includes('text/html'))throw Error('Official source unavailable');
+    html=(await response.text()).slice(0,600000);
+   }finally{clearTimeout(timeout)}
+   const plain=html.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi,' ').replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi,' ').replace(/<[^>]*>/g,' ').replace(/&nbsp;|&#160;/gi,' ').replace(/\s+/g,' ').toLowerCase();
+   const normalizedName=c.name.toLowerCase().replace(/\s+/g,' ');
+   const email=c.email.toLowerCase();
+   if(plain.includes(normalizedName)&&plain.includes(email)){
+    run("UPDATE coaches SET status='verified',verified_at=CURRENT_TIMESTAMP WHERE id=?",c.id);
+    activity(c.id,'source_verified','Name and email appeared on listed staff source: '+url);
+    verified++;
+   }else unmatched++;
+  }catch(e){failed++}
+ }
+ return json(res,200,{checked:rows.length,verified,unmatched,failed,note:'Only exact name and email matches on the listed page are marked verified; unmatched contacts remain unchanged.'});
+}
 if(p==='/api/coaches/import'&&method==='POST'){
  const b=await body(req);
  if(!Array.isArray(b.rows)||!b.rows.length||b.rows.length>200)throw Error('Provide 1 to 200 coach rows');
