@@ -87,6 +87,37 @@ function hudsonLoadStarterContacts(){
  target.appendChild(button);
 }
 
+function hudsonDirectoryDiscovery(){
+ const table=document.querySelector('#schoolRows'),toolbar=document.querySelector('#schoolFilter')?.parentElement;
+ if(!table||!toolbar||document.querySelector('#hudsonDiscover'))return;
+ const button=document.createElement('button');button.id='hudsonDiscover';button.type='button';button.textContent='Find Staff Directories';
+ const review=document.createElement('button');review.type='button';review.textContent='Review Found Links';
+ const status=document.createElement('span');
+ async function update(){
+  const d=await api('directory-discovery/status');
+  status.textContent='Missing links: '+d.missing+' | Suggestions: '+d.review+(d.configured?'':' | Search key needed');
+ }
+ button.onclick=()=>action(async()=>{
+  button.disabled=true;
+  try{
+   const result=await api('directory-discovery/batch','POST',{limit:3});
+   await update();notice('Searched '+result.checked+' schools; found '+result.suggestions+' candidate directories; '+result.failed+' errors');
+  }finally{button.disabled=false}
+ });
+ review.onclick=()=>action(async()=>{
+  const items=await api('directory-discovery/suggestions');
+  if(!items.length)return notice('No suggested directories to review');
+  const item=items[0];
+  const url=prompt('Check this is the official football staff directory for '+item.name+' ('+item.division+'). Edit URL if needed:',item.suggested_url);
+  if(url===null)return;
+  if(!confirm('Save this official staff directory for '+item.name+'?'))return;
+  await api('directory-discovery/approve','POST',{school_id:item.school_id,url});
+  await refresh();notice('Directory saved for '+item.name);
+ });
+ toolbar.append(button,review,status);
+ update().catch(e=>notice(e.message,true));
+}
+
 function hudsonDirectoryScanner(){
  const table=document.querySelector('#schoolRows');
  if(!table||document.querySelector('#hudsonDirectoryScan'))return;
@@ -290,6 +321,7 @@ show = async function(...args) {
   hudsonCoachImportUI();
   hudsonVerifyBatchButton();
   hudsonDirectoryScanner();
+  hudsonDirectoryDiscovery();
   return result;
 };
 // END HUDSON TOOLS
