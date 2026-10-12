@@ -74,3 +74,13 @@ test('modern profile X links are matched by named accessible label, never team l
  const html='<title>First Coach - Head Coach - Example University</title><a href="https://twitter.com/ExampleTeam" aria-label="Team Twitter">Team</a><a href="https://twitter.com/FirstCoach" aria-label="Visit First Coach Twitter profile page">X</a>';
  assert.equal(parseCoachProfile(html,url,'First Coach').x_url,'https://x.com/FirstCoach');assert.equal(parseCoachProfile(html,url,'Wrong Coach'),null);
 });
+
+test('directory import queues durable profiles and profile enrichment fills only matched missing fields',async()=>{
+ const db=new DatabaseSync(':memory:');db.exec(`CREATE TABLE schools(id INTEGER PRIMARY KEY,name TEXT,division TEXT,staff_url TEXT);CREATE TABLE coaches(id INTEGER PRIMARY KEY,school_id INTEGER,name TEXT,role TEXT DEFAULT '',email TEXT DEFAULT '',phone TEXT DEFAULT '',x_url TEXT DEFAULT '',source_url TEXT DEFAULT '',status TEXT DEFAULT '',verified_at TEXT DEFAULT '');INSERT INTO schools VALUES(1,'Example University','D2','https://example.edu/sports/football/coaches');`);
+ const query=(sql,...p)=>db.prepare(sql).all(...p),one=(sql,...p)=>db.prepare(sql).get(...p),run=(sql,...p)=>db.prepare(sql).run(...p),originalFetch=global.fetch;
+ global.fetch=async u=>new Response(String(u).endsWith('robots.txt')?'User-agent: *\nDisallow:':String(u).endsWith('/first/1')?'<title>First Coach - Coach</title><div class="sidearm-coach-bio-header-details"><h1 class="sidearm-coach-bio-name">First Coach</h1><dl><dt>Email</dt><dd><a href="mailto:first@example.edu">Email</a></dd></dl></div>':'<table><tr><td><a href="/sports/football/roster/coaches/first/1">First Coach</a></td><td>Head Coach</td></tr></table>',{headers:{'content-type':'text/html'}});
+ try{const collector=installCollector({db,query,one,run,inspectUrl:async u=>u});async function finish(){for(let i=0;i<100&&collector.status().busy;i++)await new Promise(r=>setTimeout(r,5));assert.equal(collector.status().busy,false);}
+ collector.start();await finish();assert.equal(one('SELECT COUNT(*) n FROM coaches').n,1);assert.equal(one('SELECT email FROM coaches').email,'');assert.equal(one('SELECT status FROM collection_profiles').status,'pending');
+ collector.start();await finish();assert.equal(one('SELECT email FROM coaches').email,'first@example.edu');assert.equal(one('SELECT status FROM collection_profiles').status,'complete');assert.equal(one("SELECT COUNT(*) n FROM collection_evidence WHERE decision='profile_matched'").n,1);collector.pause();
+ }finally{global.fetch=originalFetch;}
+});

@@ -60,6 +60,7 @@ export function directoryIdentity(s){
   'SMU':['Southern Methodist University','SMU'], 'TCU':['Texas Christian University','TCU'],
   'BYU':['Brigham Young University','BYU'], 'FIU':['Florida International University','FIU'],
   'FAU':['Florida Atlantic University','FAU'], 'UMass':['University of Massachusetts Amherst','UMass'],
+  'Appalachian State':['Appalachian State University','App State'], 'Arizona State':['Arizona State University','Arizona State','ASU'],
   'NC State':['North Carolina State University','NC State'], 'Pitt':['University of Pittsburgh','Pitt'],
   'Army':['United States Military Academy','Army'], 'Navy':['United States Naval Academy','Navy']
  };
@@ -70,6 +71,7 @@ export function installCollector({db,query,one,run,inspectUrl}){
  CREATE TABLE IF NOT EXISTS collection_progress(school_id INTEGER PRIMARY KEY REFERENCES schools(id),status TEXT NOT NULL,source_url TEXT DEFAULT '',checked_at TEXT DEFAULT CURRENT_TIMESTAMP,imported INTEGER DEFAULT 0,error TEXT DEFAULT '');
  CREATE TABLE IF NOT EXISTS collection_evidence(id INTEGER PRIMARY KEY,school_id INTEGER NOT NULL REFERENCES schools(id),coach_id INTEGER REFERENCES coaches(id),source_url TEXT NOT NULL,observed_at TEXT NOT NULL,payload TEXT NOT NULL,decision TEXT NOT NULL);`);
  db.exec("CREATE TABLE IF NOT EXISTS collection_directories(school_id INTEGER PRIMARY KEY REFERENCES schools(id),directory_url TEXT NOT NULL,official_source_url TEXT NOT NULL,verified_at TEXT NOT NULL)");
+ db.exec("CREATE TABLE IF NOT EXISTS collection_profiles(id INTEGER PRIMARY KEY,school_id INTEGER NOT NULL REFERENCES schools(id),coach_id INTEGER NOT NULL REFERENCES coaches(id),profile_url TEXT NOT NULL,status TEXT NOT NULL DEFAULT 'pending',checked_at TEXT DEFAULT '',error TEXT DEFAULT '',UNIQUE(coach_id,profile_url))");
  if(!query('PRAGMA table_info(coaches)').some(c=>c.name==='manual_lock'))db.exec('ALTER TABLE coaches ADD COLUMN manual_lock INTEGER DEFAULT 0');
  let busy=false;const robotsCache=new Map();
  async function fetchPage(url){
@@ -77,7 +79,7 @@ export function installCollector({db,query,one,run,inspectUrl}){
    await inspectUrl(url); const r=await fetch(url,{redirect:'manual',signal:AbortSignal.timeout(15000),headers:{'User-Agent':'HudsonRecruitingDirectory/2.0 (public football staff contacts)'}});
    if([301,302,303,307,308].includes(r.status)){url=new URL(r.headers.get('location'),url).href;continue;}
    if(!r.ok)throw Error('Source HTTP '+r.status);if(!r.headers.get('content-type')?.includes('text/html'))throw Error('HTML directory required');
-   let html='';for await(const chunk of r.body){html+=Buffer.from(chunk).toString();if(html.length>2000000)throw Error('Directory too large');}return {html,url};
+   let html='';for await(const chunk of r.body){html+=Buffer.from(chunk).toString();if(html.length>8000000)throw Error('Directory too large');}return {html,url};
   }throw Error('Too many redirects');
  }
  async function checkRobots(url){
@@ -99,7 +101,7 @@ export function installCollector({db,query,one,run,inspectUrl}){
   if(!process.env.BRAVE_SEARCH_API_KEY)throw Error('Missing BRAVE_SEARCH_API_KEY for directory discovery');
   const identity=directoryIdentity(s);
   const results=await search(identity.query+' '+s.division+' official football coaching staff');
-  const candidates=results.filter(x=>{try{const u=new URL(x.url);return u.protocol==='https:'&&/\/sports\/(football|fball)\/(coaches|staff)|\/staff-directory|\/coaches\/?$/i.test(u.pathname)&&! /\/20\d{2}(?:[/-]|$)/.test(u.pathname.replace('/'+new Date().getUTCFullYear(),''))&&identity.candidateNames.some(name=>normalize(x.title).includes(normalize(name)));}catch{return false}});
+  const candidates=results.filter(x=>{try{const u=new URL(x.url);return u.protocol==='https:'&&/\/sports\/(football|fball)\/(coaches|staff)|\/staff-directory|\/coaches\/?$/i.test(u.pathname)&&! /\/20\d{2}(?:[/-]|$)/.test(u.pathname.replace('/'+new Date().getUTCFullYear(),''))&&identity.candidateNames.some(name=>normalize(x.title).includes(normalize(name)));}catch{return false}}).sort((a,b)=>Number(/staff-directory/.test(a.url))-Number(/staff-directory/.test(b.url)));
   if(!candidates.length)throw Error('No current named football directory found; needs review');
   // Search university-owned pages separately: athletics results often crowd them out.
   const institutions=[...results.filter(x=>{try{return new URL(x.url).hostname.endsWith('.edu')}catch{return false}}),...await search(identity.query+' official athletics site:edu',5)];
@@ -108,9 +110,10 @@ export function installCollector({db,query,one,run,inspectUrl}){
    if(seen.has(institution.url))continue;seen.add(institution.url);
    try{
     const page=await fetchPage(institution.url),host=new URL(page.url).hostname,$=load(page.html);
-    if(!host.endsWith('.edu')||!identity.campusNames.some(name=>normalize($('title').text()).includes(normalize(name))))continue;
+    if(!host.endsWith('.edu')||!identity.campusNames.some(name=>normalize($('title,h1,h2').text()+' '+($('meta[property="og:site_name"]').attr('content')||'')).includes(normalize(name))))continue;
     anchors.set(host.replace(/^www\./,''),page.url);
-    $('a[href]').each((_,a)=>{try{const target=new URL($(a).attr('href'),page.url);if(target.protocol==='https:'&&/athletic/i.test($(a).text()))anchors.set(target.hostname.replace(/^www\./,''),page.url);}catch{}});
+    $('a[href]').each((_,a)=>{try{const target=new URL($(a).attr('href'),page.url);if(/^https?:$/.test(target.protocol)&&/athletic/i.test($(a).text()))anchors.set(target.hostname.replace(/^www\./,''),page.url);}catch{}});
+    for(const candidate of candidates){const host=new URL(candidate.url).hostname.replace(/^www\./,'');if(anchors.has(host)){if(s.id)run('INSERT OR REPLACE INTO collection_directories(school_id,directory_url,official_source_url,verified_at) VALUES(?,?,?,?)',s.id,candidate.url,anchors.get(host),new Date().toISOString());return candidate.url;}}
    }catch{} // An unavailable campus page must not discard other ownership evidence.
   }
   for(const candidate of candidates){const host=new URL(candidate.url).hostname.replace(/^www\./,'');if(anchors.has(host)){if(s.id)run('INSERT OR REPLACE INTO collection_directories(school_id,directory_url,official_source_url,verified_at) VALUES(?,?,?,?)',s.id,candidate.url,anchors.get(host),new Date().toISOString());return candidate.url;}}
@@ -124,17 +127,6 @@ export function installCollector({db,query,one,run,inspectUrl}){
    // Existing school staff URLs are the authoritative domain anchors. Redirects across domains need review.
    if(new URL(source).hostname.replace(/^www\./,'')!==new URL(page.url).hostname.replace(/^www\./,''))throw Error('Cross-domain redirect needs review');
    const rows=parseDirectory(page.html,page.url);if(!rows.length)throw Error('No supported named football staff rows; needs review');
-   for(const c of rows){
-    if(!c.profile_url||new URL(c.profile_url).hostname!==new URL(page.url).hostname||! /\/roster\/coaches\/|\/staff-directory\//.test(new URL(c.profile_url).pathname)||c.email&&c.phone&&c.x_url)continue;
-    try{
-     await checkRobots(c.profile_url);const profile=await fetchPage(c.profile_url);
-     if(new URL(profile.url).hostname!==new URL(page.url).hostname)continue;
-     const fields=parseCoachProfile(profile.html,profile.url,c.name);if(fields){
-      c.field_sources={};for(const key of ['email','phone','x_url'])if(fields[key]){if(c[key]&&c[key]!==fields[key])c.uncertain=true;else if(!c[key]){c[key]=fields[key];c.field_sources[key]=profile.url;}}
-     }
-    }catch(e){c.profile_note=String(e.message).slice(0,200);}
-    await new Promise(resolve=>setTimeout(resolve,500));
-   }
    let imported=0,review=0;const now=new Date().toISOString();db.exec('BEGIN IMMEDIATE');
    try{for(const c of rows){
     const matches=query('SELECT * FROM coaches WHERE school_id=?',s.id).filter(x=>normalize(x.name)===normalize(c.name));
@@ -143,6 +135,7 @@ export function installCollector({db,query,one,run,inspectUrl}){
     if(c.uncertain||matches.length>1||(coach&&((coach.email&&coach.email.toLowerCase()!==c.email)||(coach.phone&&coach.phone!==c.phone)||(coach.x_url&&coach.x_url!==c.x_url)||(coach.manual_lock)||(coach.role&&normalize(coach.role)!==normalize(c.role))))){decision='review';review++;}
     else if(!coach){const result=run("INSERT INTO coaches(school_id,name,role,email,phone,x_url,source_url,status,verified_at) VALUES(?,?,?,?,?,?,?,'verified',?)",s.id,c.name,c.role,c.email,c.phone,c.x_url,page.url,now);coach={id:Number(result.lastInsertRowid)};imported++;}
     else {run("UPDATE coaches SET role=CASE WHEN role='' THEN ? ELSE role END,email=CASE WHEN email='' THEN ? ELSE email END,phone=CASE WHEN phone='' THEN ? ELSE phone END,x_url=CASE WHEN x_url='' THEN ? ELSE x_url END,source_url=?,verified_at=?,status='verified' WHERE id=?",c.role,c.email,c.phone,c.x_url,page.url,now,coach.id);decision='matched';}
+    if(coach&&decision!=='review'&&c.profile_url&&new URL(c.profile_url).hostname===new URL(page.url).hostname&&/\/roster\/coaches\/|\/staff-directory\//.test(new URL(c.profile_url).pathname)&&!(c.email&&c.phone&&c.x_url))run('INSERT OR IGNORE INTO collection_profiles(school_id,coach_id,profile_url) VALUES(?,?,?)',s.id,coach.id,c.profile_url);
     run('INSERT INTO collection_evidence(school_id,coach_id,source_url,observed_at,payload,decision) VALUES(?,?,?,?,?,?)',s.id,coach?.id||null,page.url,now,JSON.stringify({...c,shared_email:!!sharedEmail}),decision);
    }
    run("UPDATE schools SET staff_url=? WHERE id=? AND staff_url=''",page.url,s.id);
@@ -150,10 +143,26 @@ export function installCollector({db,query,one,run,inspectUrl}){
    }catch(e){db.exec('ROLLBACK');throw e;}
   }catch(e){run("INSERT OR REPLACE INTO collection_progress(school_id,status,source_url,error) VALUES(?,'review',?,?)",s.id,source,String(e.message).slice(0,400));}
  }
+ async function processProfile(job){
+  const coach=one('SELECT * FROM coaches WHERE id=?',job.coach_id),school=one('SELECT * FROM schools WHERE id=?',job.school_id);
+  try{
+   if(!coach||coach.manual_lock)throw Error('Manually edited contact remains protected');
+   if(!school.staff_url||new URL(job.profile_url).hostname!==new URL(school.staff_url).hostname)throw Error('Profile has no matching official school domain');
+   await checkRobots(job.profile_url);const page=await fetchPage(job.profile_url);
+   if(new URL(page.url).hostname!==new URL(job.profile_url).hostname)throw Error('Cross-domain profile needs review');
+   const fields=parseCoachProfile(page.html,page.url,coach.name);if(!fields)throw Error('Unsupported or unmatched named profile');
+   const now=new Date().toISOString();let conflict=false;db.exec('BEGIN IMMEDIATE');
+   try{
+    for(const key of ['email','phone','x_url'])if(fields[key]){if(coach[key]&&coach[key]!==fields[key])conflict=true;else if(!coach[key])run('UPDATE coaches SET '+key+'=? WHERE id=? AND manual_lock=0 AND '+key+"=''",fields[key],coach.id);}
+    run('INSERT INTO collection_evidence(school_id,coach_id,source_url,observed_at,payload,decision) VALUES(?,?,?,?,?,?)',school.id,coach.id,page.url,now,JSON.stringify({...fields,name:coach.name,kind:'profile'}),conflict?'review':'profile_matched');
+    run('UPDATE collection_profiles SET status=?,checked_at=?,error=? WHERE id=?',conflict?'review':'complete',now,conflict?'Conflicting profile values preserved':'',job.id);db.exec('COMMIT');
+   }catch(e){db.exec('ROLLBACK');throw e;}
+  }catch(e){run("UPDATE collection_profiles SET status='review',checked_at=CURRENT_TIMESTAMP,error=? WHERE id=?",String(e.message).slice(0,400),job.id);}
+ }
  async function tick(){if(busy||!one('SELECT enabled FROM collection_state WHERE id=1').enabled)return;busy=true;try{
   const s=one("SELECT s.* FROM schools s LEFT JOIN collection_progress p ON p.school_id=s.id WHERE s.division IN ('FBS','FCS','D2','D3') AND p.school_id IS NULL AND (s.staff_url!='' OR ?=1) ORDER BY s.id LIMIT 1",Number(Boolean(process.env.BRAVE_SEARCH_API_KEY)));
-  if(s)await processSchool(s);else run('UPDATE collection_state SET enabled=0 WHERE id=1');
+  if(s)await processSchool(s);else {const job=one("SELECT * FROM collection_profiles WHERE status='pending' ORDER BY id LIMIT 1");if(job)await processProfile(job);else run('UPDATE collection_state SET enabled=0 WHERE id=1');}
  }finally{busy=false;}}
  const timer=setInterval(()=>tick().catch(e=>console.error('Collection worker:',e.message)),5000);timer.unref();
- return {status:()=>({enabled:!!one('SELECT enabled FROM collection_state WHERE id=1').enabled,busy,searchConfigured:!!process.env.BRAVE_SEARCH_API_KEY,total:one('SELECT COUNT(*) n FROM schools').n,counts:query('SELECT status,COUNT(*) count FROM collection_progress GROUP BY status'),schools:query('SELECT s.name,s.division,p.* FROM collection_progress p JOIN schools s ON s.id=p.school_id ORDER BY p.checked_at DESC'),review:query("SELECT e.*,s.name school FROM collection_evidence e JOIN schools s ON s.id=e.school_id WHERE e.decision='review' ORDER BY e.id DESC LIMIT 200")}),start:()=>{run('UPDATE collection_state SET enabled=1 WHERE id=1');void tick();},pause:()=>run('UPDATE collection_state SET enabled=0 WHERE id=1'),retry:()=>run("DELETE FROM collection_progress WHERE status='review'"),parseDirectory,fetchPage,discover};
+ return {status:()=>({enabled:!!one('SELECT enabled FROM collection_state WHERE id=1').enabled,busy,searchConfigured:!!process.env.BRAVE_SEARCH_API_KEY,total:one('SELECT COUNT(*) n FROM schools').n,counts:query('SELECT status,COUNT(*) count FROM collection_progress GROUP BY status'),profiles:query('SELECT status,COUNT(*) count FROM collection_profiles GROUP BY status'),schools:query('SELECT s.name,s.division,p.* FROM collection_progress p JOIN schools s ON s.id=p.school_id ORDER BY p.checked_at DESC'),review:query("SELECT e.*,s.name school FROM collection_evidence e JOIN schools s ON s.id=e.school_id WHERE e.decision='review' ORDER BY e.id DESC LIMIT 200")}),start:()=>{run('UPDATE collection_state SET enabled=1 WHERE id=1');void tick();},pause:()=>run('UPDATE collection_state SET enabled=0 WHERE id=1'),retry:()=>run("DELETE FROM collection_progress WHERE status='review'"),parseDirectory,fetchPage,discover};
 }
