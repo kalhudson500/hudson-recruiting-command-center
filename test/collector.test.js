@@ -25,3 +25,24 @@ test('durable worker preserves edited contacts and never duplicates matched coac
  run('UPDATE coaches SET manual_lock=1,phone=? WHERE id=1','555-999-0000');run('DELETE FROM collection_progress');collector.start();await finish();assert.equal(one('SELECT COUNT(*) n FROM coaches').n,2);assert.equal(one('SELECT phone FROM coaches WHERE id=1').phone,'555-999-0000');assert.equal(collector.status().counts[0].status,'review');collector.pause();
  }finally{global.fetch=originalFetch;}
 });
+
+test('Sidearm photo column and row header still match role correctly',()=>{
+ const html='<table><tr><td><img alt="Photo"></td><th scope="row"><a>Ted White</a></th><td>Head Coach</td><td><a href="mailto:football@example.edu">Email</a></td></tr></table>';
+ const rows=parseDirectory(html,url);assert.equal(rows.length,1);assert.equal(rows[0].role,'Head Coach');assert.equal(rows[0].email,'football@example.edu');
+});
+
+test('discovery uses a separate campus search and requires an athletics link',async()=>{
+ const db=new DatabaseSync(':memory:');db.exec('CREATE TABLE schools(id INTEGER PRIMARY KEY,name TEXT,division TEXT,staff_url TEXT);CREATE TABLE coaches(id INTEGER PRIMARY KEY,manual_lock INTEGER);');
+ const query=(s,...p)=>db.prepare(s).all(...p),one=(s,...p)=>db.prepare(s).get(...p),run=(s,...p)=>db.prepare(s).run(...p);
+ const originalFetch=global.fetch,oldKey=process.env.BRAVE_SEARCH_API_KEY;process.env.BRAVE_SEARCH_API_KEY='fixture-only';let searches=0;
+ global.fetch=async u=>{
+  if(new URL(u).hostname==='api.search.brave.com'){searches++;return Response.json({web:{results:searches===1?[{title:'Football Coaches - Example University',url:'https://exampleathletics.com/sports/football/coaches'}]:[{title:'Example University Athletics',url:'https://example.edu/athletics'}]}});}
+  return new Response('<title>Example University Athletics</title><a href="https://exampleathletics.com">Athletics</a>',{headers:{'content-type':'text/html'}});
+ };
+ try{const collector=installCollector({db,query,one,run,inspectUrl:async u=>u});assert.equal(await collector.discover({name:'Example University',division:'D2'}),'https://exampleathletics.com/sports/football/coaches');assert.equal(searches,2);collector.pause();}
+ finally{global.fetch=originalFetch;if(oldKey===undefined)delete process.env.BRAVE_SEARCH_API_KEY;else process.env.BRAVE_SEARCH_API_KEY=oldKey;}
+});
+test('two named coaches can share an explicitly listed public football-office email',()=>{
+ const rows=parseDirectory('<table>'+row('First Coach','football@example.edu')+row('Second Coach','football@example.edu')+'</table>',url);
+ assert.equal(rows.length,2);assert.equal(rows[0].email,rows[1].email);assert.equal(rows[0].uncertain,false);
+});

@@ -80,3 +80,7 @@ The Cheerio parser supports football table rows and common Sidearm staff cards. 
 `collection_progress` stores school outcomes. `collection_evidence` stores observed contact JSON, source URLs, timestamps, and import/review decisions. Existing contacts are matched by normalized name within a school, email collisions are flagged, and only empty fields are filled. Existing conflicting values, opt-outs, campaigns, leads, and manual edits are preserved. All Edit Contact changes lock the record against automatic updates. Restarting/retrying does not recreate matched coaches.
 
 Tests: `node --test`. No production data or secrets are committed.
+
+### Collector coverage improvements
+
+Directory discovery now searches campus-owned `.edu` pages separately from staff-directory results, then requires an Athletics link to the candidate host. Failed campus fetches do not discard other ownership evidence. Archived year-specific directory results are excluded. Sidearm table rows with photo columns and named row headers are supported. Distinct named coaches may share the public football-office email explicitly listed in their own rows; shared-email evidence is retained without treating those people as duplicate coaches. Existing field conflicts and manual locks remain protected.
