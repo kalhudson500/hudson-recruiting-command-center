@@ -87,6 +87,30 @@ function hudsonLoadStarterContacts(){
  target.appendChild(button);
 }
 
+function hudsonDirectoryScanner(){
+ const table=document.querySelector('#schoolRows');
+ if(!table||document.querySelector('#hudsonDirectoryScan'))return;
+ const toolbar=document.querySelector('#schoolFilter')?.parentElement;
+ if(!toolbar)return;
+ const button=document.createElement('button');button.id='hudsonDirectoryScan';button.type='button';
+ button.textContent='Scan Staff Directories';
+ const status=document.createElement('span');status.id='hudsonScanStatus';
+ const update=async()=>{
+  const d=await api('directory-scan/status');
+  status.textContent='Directories: '+d.with_url+'/'+d.total+' | Scanned: '+d.attempted+' | Review: '+d.pendingReview;
+ };
+ button.onclick=()=>action(async()=>{
+  button.disabled=true;
+  try{
+   const r=await api('directory-scan/batch','POST',{limit:3});
+   await update();
+   notice('Scanned '+r.scanned+' directories; '+r.foundEmails+' emails and '+r.foundSocial+' social links found. '+r.failed+' failed.');
+  }finally{button.disabled=false}
+ });
+ toolbar.append(button,status);
+ update().catch(e=>notice(e.message,true));
+}
+
 function hudsonVerifyBatchButton(){
  const rows=document.querySelector('#coachRows');if(!rows)return;
  const toolbar=document.querySelector('#coachFilter')?.parentElement;
@@ -265,6 +289,7 @@ show = async function(...args) {
   hudsonEnhance();
   hudsonCoachImportUI();
   hudsonVerifyBatchButton();
+  hudsonDirectoryScanner();
   return result;
 };
 // END HUDSON TOOLS
