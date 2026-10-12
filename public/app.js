@@ -87,6 +87,24 @@ function hudsonLoadStarterContacts(){
  target.appendChild(button);
 }
 
+function hudsonVerifyBatchButton(){
+ const rows=document.querySelector('#coachRows');if(!rows)return;
+ const toolbar=document.querySelector('#coachFilter')?.parentElement;
+ if(!toolbar||document.querySelector('#hudsonVerifyBatch'))return;
+ const button=document.createElement('button');button.id='hudsonVerifyBatch';button.type='button';
+ button.textContent='Check 10 Contacts';
+ button.onclick=()=>action(async()=>{
+  button.disabled=true;
+  try{
+   notice('Checking official staff pages...');
+   const result=await api('coaches/verify-batch','POST',{limit:10});
+   await refresh();
+   notice('Checked '+result.checked+': '+result.verified+' matched, '+result.unmatched+' unmatched, '+result.failed+' unavailable');
+  }finally{button.disabled=false}
+ });
+ toolbar.appendChild(button);
+}
+
 function hudsonCoachImportUI(){
  const form=document.querySelector('#coachForm');
  if(!form)return;
@@ -246,6 +264,7 @@ show = async function(...args) {
   const result = await hudsonOriginalShow(...args);
   hudsonEnhance();
   hudsonCoachImportUI();
+  hudsonVerifyBatchButton();
   return result;
 };
 // END HUDSON TOOLS
