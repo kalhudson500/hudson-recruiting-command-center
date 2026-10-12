@@ -62,6 +62,59 @@ function hudsonExport(filename, headers, rows) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
+
+function hudsonCoachImportUI(){
+ const form=document.querySelector('#coachForm');
+ if(!form)return;
+ if(!form.querySelector('[name="phone"]')){
+  const label=document.createElement('label');label.textContent='Public Phone';
+  const input=document.createElement('input');input.name='phone';input.type='tel';
+  label.appendChild(input);form.appendChild(label);
+ }
+ if(!document.querySelector('#hudsonImportCoaches')){
+  const panel=document.createElement('details');panel.id='hudsonImportCoaches';
+  const heading=document.createElement('summary');heading.textContent='Bulk Import Coach Contacts';
+  const help=document.createElement('p');help.textContent='Paste a JSON array. Each contact requires school and name; optional division, role, email, phone, x_url, instagram_url, source_url, notes. Maximum 200 per batch. All imports are unverified.';
+  const input=document.createElement('textarea');input.id='hudsonCoachJson';input.rows=6;
+  const button=document.createElement('button');button.type='button';button.textContent='Import Coach Contacts';
+  button.onclick=()=>action(async()=>{
+   const rows=JSON.parse(input.value);
+   if(!Array.isArray(rows)||!rows.length||rows.length>200)throw Error('Provide 1 to 200 contacts');
+   if(!confirm('Import '+rows.length+' contacts as unverified?'))return;
+   const result=await api('coaches/import','POST',{rows});
+   await refresh();notice('Imported '+result.imported+'; duplicates skipped '+result.skipped);
+  });
+  panel.append(heading,help,input,button);form.closest('section').appendChild(panel);
+ }
+ const table=document.querySelector('#coachRows');
+ if(!table||table.dataset.contactLinks)return;
+ table.dataset.contactLinks='yes';
+ const th=document.createElement('th');th.textContent='Contact';table.closest('table').querySelector('thead tr').appendChild(th);
+ const decorate=()=>{
+  table.querySelectorAll('tr').forEach(tr=>{
+   if(tr.querySelector('.hudsonContactCell'))return;
+   const coach=coaches.find(c=>c.name===tr.cells[0]?.textContent.trim()&&tr.cells[1]?.textContent.includes(c.school));
+   const td=document.createElement('td');td.className='hudsonContactCell';
+   if(coach){
+    if(coach.phone){
+     const link=document.createElement('a');link.href='tel:'+coach.phone.replace(/[^+0-9]/g,'');
+     link.textContent=coach.phone;td.appendChild(link);
+    }
+    if(coach.email&&!coach.opted_out){
+     const link=document.createElement('a');
+     link.href='https://mail.google.com/mail/?view=cm&fs=1&to='+encodeURIComponent(coach.email);
+     link.target='_blank';link.rel='noopener';link.textContent=' Gmail';td.appendChild(link);
+    }
+    const copy=document.createElement('button');copy.type='button';copy.className='small secondary';copy.textContent='Copy';
+    copy.onclick=()=>hudsonCopy([coach.name,coach.school,coach.role,coach.email,coach.phone,coach.x_url].filter(Boolean).join(' | '));
+    td.appendChild(copy);
+   }
+   tr.appendChild(td);
+  });
+ };
+ new MutationObserver(decorate).observe(table,{childList:true});decorate();
+}
+
 function hudsonEnhance() {
   const schoolRows = document.querySelector('#schoolRows');
   const coachRows = document.querySelector('#coachRows');
