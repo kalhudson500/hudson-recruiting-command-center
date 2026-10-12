@@ -152,6 +152,7 @@ const hudsonOriginalShow = show;
 show = async function(...args) {
   const result = await hudsonOriginalShow(...args);
   hudsonEnhance();
+  hudsonCoachImportUI();
   return result;
 };
 // END HUDSON TOOLS
