@@ -2,7 +2,7 @@ import {renderContactDirectory} from './contact-directory.js';
 let csrf='',page='dashboard',schools=[],coaches=[],selected=new Set(),hbcuOnly=false;const $=s=>document.querySelector(s),esc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const api=async(url,method='GET',data)=>{const r=await fetch('/api/'+url,{method,headers:{'Content-Type':'application/json','X-CSRF-Token':csrf},body:data===undefined?undefined:JSON.stringify(data)});const v=await r.json();if(!r.ok)throw Error(v.error||'Request failed');return v};
 async function loadCoaches(){const rows=[];for(let offset=0;;offset+=1000){const batch=await api('coaches?limit=1000&offset='+offset);rows.push(...batch);if(batch.length<1000)break;}return rows.reverse();}
-function notice(t,bad=false){$('#notice').textContent=t;$('#notice').style.color=bad?'#ff9b9b':'#a4ddbc'}
+function notice(t,bad=false){if(!$('#login').hidden){$('#loginError').textContent=bad?t:'';return;}$('#notice').textContent=t;$('#notice').style.color=bad?'#ff9b9b':'#a4ddbc'}
 async function action(f){try{await f()}catch(e){notice(e.message,true)}}
 function formdata(f){return Object.fromEntries(new FormData(f).entries())}
 function optSchool(){return schools.map(s=>`<option value="${s.id}">${esc(s.name)} (${s.division})</option>`).join('')}
