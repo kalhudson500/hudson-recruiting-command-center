@@ -53,6 +53,9 @@ export function parseCoachProfile(html,url,name){
 }
 export function directoryIdentity(s){
  const aliases={
+  'Akron':['University of Akron','Akron'], 'Alabama':['University of Alabama','Alabama'],
+  'Alabama A&M University':['Alabama A&M University','Alabama A&M'],
+  'Alabama State University':['Alabama State University','Alabama State'],
   'Miami (FL)':['University of Miami','Miami'], 'Miami (OH)':['Miami University','Miami'],
   'LSU':['Louisiana State University','LSU'], 'Ole Miss':['University of Mississippi','Ole Miss'],
   'USC':['University of Southern California','USC'], 'UCLA':['University of California Los Angeles','UCLA'],
@@ -66,7 +69,8 @@ export function directoryIdentity(s){
   'NC State':['North Carolina State University','NC State'], 'Pitt':['University of Pittsburgh','Pitt'],
   'Army':['United States Military Academy','Army'], 'Navy':['United States Naval Academy','Navy']
  };
- const pair=aliases[s.name];return {query:pair?pair[0]:s.name,candidateNames:pair?[...new Set(pair)]:[s.name],campusNames:pair?[pair[0]]:[s.name]};
+ const campusPages={'Akron':'https://www.uakron.edu/campus-life/','Alabama':'https://www.ua.edu/campus-life/','Alabama A&M University':'https://www.aamu.edu/athletics/index.html','Alabama State University':'https://alasu.edu/'};
+ const pair=aliases[s.name];return {campusUrl:campusPages[s.name]||'',query:pair?pair[0]:s.name,candidateNames:pair?[...new Set(pair)]:[s.name],campusNames:pair?[pair[0]]:[s.name]};
 }
 export function installCollector({db,query,one,run,inspectUrl}){
  db.exec(`CREATE TABLE IF NOT EXISTS collection_state(id INTEGER PRIMARY KEY CHECK(id=1),enabled INTEGER DEFAULT 0); INSERT OR IGNORE INTO collection_state(id) VALUES(1);
@@ -107,7 +111,7 @@ export function installCollector({db,query,one,run,inspectUrl}){
   const candidates=results.filter(x=>{try{const u=new URL(x.url);return u.protocol==='https:'&&/\/sports\/(football|fball)\/(coaches|staff)|\/staff-directory|\/coaches\/?$/i.test(u.pathname)&&! /\/20\d{2}(?:[/-]|$)/.test(u.pathname.replace('/'+new Date().getUTCFullYear(),''))&&identity.candidateNames.some(name=>normalize(x.title).includes(normalize(name)));}catch{return false}}).sort((a,b)=>Number(/staff-directory/.test(a.url))-Number(/staff-directory/.test(b.url)));
   if(!candidates.length)throw Error('No current named football directory found; needs review');
   // Search university-owned pages separately: athletics results often crowd them out.
-  const institutions=[...results.filter(x=>{try{return new URL(x.url).hostname.endsWith('.edu')}catch{return false}}),...await search(identity.query+' official athletics site:edu',5)];
+  const institutions=[...(identity.campusUrl?[{url:identity.campusUrl}]:[]),...results.filter(x=>{try{return new URL(x.url).hostname.endsWith('.edu')}catch{return false}}),...await search(identity.query+' official athletics site:edu',5)];
   const anchors=new Map(),seen=new Set();
   for(const institution of institutions){
    if(seen.has(institution.url))continue;seen.add(institution.url);
