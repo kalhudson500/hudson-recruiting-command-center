@@ -133,11 +133,26 @@ function hudsonCoachImportUI(){
     const copy=document.createElement('button');copy.type='button';copy.className='small secondary';copy.textContent='Copy';
     copy.onclick=()=>hudsonCopy([coach.name,coach.school,coach.role,coach.email,coach.phone,coach.x_url].filter(Boolean).join(' | '));
     td.appendChild(copy);
+    const edit=document.createElement('button');edit.type='button';edit.className='small secondary';edit.textContent='Edit Contact';edit.onclick=()=>hudsonEditCoach(coach.id);td.appendChild(edit);
    }
    tr.appendChild(td);
   });
  };
  new MutationObserver(decorate).observe(table,{childList:true});decorate();
+}
+
+async function hudsonEditCoach(id){
+ const coach=coaches.find(c=>c.id===id);if(!coach)return;
+ const fields=[['name','Coach Name'],['role','Position'],['email','Email'],['phone','Phone'],['x_url','X / Twitter URL'],['instagram_url','Instagram URL'],['source_url','Official Source URL'],['notes','Notes']];
+ const changes={};
+ for(const [key,label] of fields){
+  const value=prompt(label+' (blank clears the field)',coach[key]||'');
+  if(value===null)return;
+  changes[key]=value.trim();
+ }
+ if(!changes.name)return notice('Coach name required',true);
+ if(!confirm('Save changes for '+changes.name+'?'))return;
+ await action(async()=>{await api('coaches/'+id,'PATCH',changes);await refresh();notice('Coach contact updated')});
 }
 
 function hudsonEnhance() {
