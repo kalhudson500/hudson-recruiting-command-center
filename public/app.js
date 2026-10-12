@@ -63,13 +63,37 @@ function hudsonExport(filename, headers, rows) {
 }
 
 
+const hudsonStarterContacts=[
+ {school:'Howard University',name:'Nicholas Gould',role:'Recruiting Coordinator / Linebackers',email:'nicholas.gould@howard.edu',source_url:'https://hubison.com/sports/football/coaches'},
+ {school:'Howard University',name:'Del Cowsette',role:'Defensive Line Coach',email:'del.cowsette@howard.edu',source_url:'https://hubison.com/sports/football/coaches'},
+ {school:'Howard University',name:'Maurice Paulk',role:'Assistant Defensive Line Coach',email:'maurice.paulk1@howard.edu',source_url:'https://hubison.com/sports/football/coaches'},
+ {school:'Howard University',name:'Janice Pettyjohn',role:'Director of Player Personnel & On-Campus Recruiting',email:'janice.pettyjohn@howard.edu',source_url:'https://hubison.com/sports/football/coaches'},
+ {school:'Azusa Pacific University',name:'Craig Robbins',role:'Recruiting Coordinator / Running Backs',email:'cprobbins@apu.edu',source_url:'https://athletics.apu.edu/sports/football/coaches'},
+ {school:'Azusa Pacific University',name:'Jericho Silvernail',role:'Defensive Line Coach',email:'jsilvernail@apu.edu',source_url:'https://athletics.apu.edu/sports/football/coaches'},
+ {school:'Azusa Pacific University',name:'A.J. Parnell',role:'Head Coach',email:'aparnell@apu.edu',phone:'(626) 815-4645',source_url:'https://athletics.apu.edu/sports/football/coaches'}
+];
+function hudsonLoadStarterContacts(){
+ const target=document.querySelector('#hudsonImportCoaches');
+ if(!target||document.querySelector('#hudsonStarterContacts'))return;
+ const button=document.createElement('button');button.id='hudsonStarterContacts';button.type='button';button.className='secondary';
+ button.textContent='Load 7 Official-Directory Contacts';
+ button.onclick=()=>{
+  const names=[...new Set(hudsonStarterContacts.map(c=>c.school))];
+  const missing=names.filter(name=>!schools.some(s=>s.name.toLowerCase()===name.toLowerCase()));
+  if(missing.length)return notice('School names not found: '+missing.join(', ')+'. No contacts loaded.',true);
+  document.querySelector('#hudsonCoachJson').value=JSON.stringify(hudsonStarterContacts,null,2);
+  target.open=true;notice('Loaded 7 official-directory contacts. Review and tap Import Coach Contacts.');
+ };
+ target.appendChild(button);
+}
+
 function hudsonCoachImportUI(){
  const form=document.querySelector('#coachForm');
  if(!form)return;
  if(!form.querySelector('[name="phone"]')){
   const label=document.createElement('label');label.textContent='Public Phone';
   const input=document.createElement('input');input.name='phone';input.type='tel';
-  label.appendChild(input);form.appendChild(label);
+  label.appendChild(input);form.insertBefore(label,form.querySelector('button')?.closest('label')||null);
  }
  if(!document.querySelector('#hudsonImportCoaches')){
   const panel=document.createElement('details');panel.id='hudsonImportCoaches';
@@ -85,6 +109,7 @@ function hudsonCoachImportUI(){
    await refresh();notice('Imported '+result.imported+'; duplicates skipped '+result.skipped);
   });
   panel.append(heading,help,input,button);form.closest('section').appendChild(panel);
+  hudsonLoadStarterContacts();
  }
  const table=document.querySelector('#coachRows');
  if(!table||table.dataset.contactLinks)return;
