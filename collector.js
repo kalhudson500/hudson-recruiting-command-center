@@ -1,4 +1,5 @@
 import { load } from 'cheerio';
+import { installXEnrichment } from './x-enrichment.js';
 export const normalize = s => String(s||'').normalize('NFKD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]/g,'');
 export function parseDirectory(html,url){
  const $=load(html); $('script,style,nav,footer,header').remove(); const contacts=[];
@@ -172,5 +173,7 @@ export function installCollector({db,query,one,run,inspectUrl}){
   if(job&&(!s||schoolSteps>=3)){await processProfile(job);schoolSteps=0;}else if(s){await processSchool(s);schoolSteps++;}else run('UPDATE collection_state SET enabled=0 WHERE id=1');
  }finally{busy=false;}}
  const timer=setInterval(()=>tick().catch(e=>console.error('Collection worker:',e.message)),5000);timer.unref();
- return {status:()=>({enabled:!!one('SELECT enabled FROM collection_state WHERE id=1').enabled,busy,searchConfigured:!!process.env.BRAVE_SEARCH_API_KEY,total:one('SELECT COUNT(*) n FROM schools').n,counts:query('SELECT status,COUNT(*) count FROM collection_progress GROUP BY status'),profiles:query('SELECT status,COUNT(*) count FROM collection_profiles GROUP BY status'),schools:query('SELECT s.name,s.division,p.* FROM collection_progress p JOIN schools s ON s.id=p.school_id ORDER BY p.checked_at DESC'),review:query("SELECT e.*,s.name school FROM collection_evidence e JOIN schools s ON s.id=e.school_id WHERE e.decision='review' ORDER BY e.id DESC LIMIT 200")}),start:()=>{run('UPDATE collection_state SET enabled=1 WHERE id=1');void tick();},pause:()=>run('UPDATE collection_state SET enabled=0 WHERE id=1'),retry:()=>run("DELETE FROM collection_progress WHERE status='review'"),parseDirectory,fetchPage,discover};
+ const xEnrichment=installXEnrichment({db,query,one,run,fetchPage,checkRobots,search});
+ return {startX:xEnrichment.start,pauseX:xEnrichment.pause,status:()=>({xEnrichment:xEnrichment.status(),enabled:!!one('SELECT enabled FROM collection_state WHERE id=1').enabled,busy,searchConfigured:!!process.env.BRAVE_SEARCH_API_KEY,total:one('SELECT COUNT(*) n FROM schools').n,counts:query('SELECT status,COUNT(*) count FROM collection_progress GROUP BY status'),profiles:query('SELECT status,COUNT(*) count FROM collection_profiles GROUP BY status'),schools:query('SELECT s.name,s.division,p.* FROM collection_progress p JOIN schools s ON s.id=p.school_id ORDER BY p.checked_at DESC'),review:query("SELECT e.*,s.name school FROM collection_evidence e JOIN schools s ON s.id=e.school_id WHERE e.decision='review' ORDER BY e.id DESC LIMIT 200")}),start:()=>{run('UPDATE collection_state SET enabled=1 WHERE id=1');void tick();},pause:()=>run('UPDATE collection_state SET enabled=0 WHERE id=1'),retry:()=>run("DELETE FROM collection_progress WHERE status='review'"),parseDirectory,fetchPage,discover};
 }
+

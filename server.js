@@ -59,6 +59,8 @@ if(p==='/api/session'){const s=session(req);return json(res,200,{authenticated:!
 if(p.startsWith('/api/')){const s=session(req);if(!s)return json(res,401,{error:'Login required'});if(method!=='GET')checkCsrf(req,s);if(p==='/api/logout'&&method==='POST'){run('DELETE FROM sessions WHERE token_hash=?',s.token_hash);return json(res,200,{ok:true},{'Set-Cookie':'sid=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0'})}
 if(p==='/api/hbcu'&&method==='GET'){installHbcu(db);return json(res,200,{schools:query('SELECT s.*, (SELECT COUNT(*) FROM coaches c WHERE c.school_id=s.id) coach_count FROM schools s WHERE s.is_hbcu=1 ORDER BY s.name'),contacts:one('SELECT COUNT(*) total,SUM(length(c.email)>0) emails,SUM(length(c.x_url)>0) x_profiles FROM coaches c JOIN schools s ON s.id=c.school_id WHERE s.is_hbcu=1')});}
 if(p==='/api/automation/status'&&method==='GET')return json(res,200,collector.status());
+if(p==='/api/automation/x/start'&&method==='POST'){collector.startX();return json(res,200,{ok:true})}
+if(p==='/api/automation/x/pause'&&method==='POST'){collector.pauseX();return json(res,200,{ok:true})}
 if(p==='/api/automation/start'&&method==='POST'){collector.start();return json(res,200,{ok:true})}
 if(p==='/api/automation/pause'&&method==='POST'){collector.pause();return json(res,200,{ok:true})}
 if(p==='/api/automation/retry'&&method==='POST'){collector.retry();collector.start();return json(res,200,{ok:true})}
@@ -215,3 +217,4 @@ if(method==='GET'&&(p==='/'||p==='/app.js'||p==='/styles.css'||p==='/contact-dir
 http.createServer(handler).listen(PORT,HOST,()=>console.log(`Hudson Command Center: http://${HOST}:${PORT}`));
 
 // GitHub connection write-access verification (2026-10-11).
+
