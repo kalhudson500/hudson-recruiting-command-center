@@ -61,7 +61,7 @@ export function installCollector({db,query,one,run,inspectUrl}){
     const matches=query('SELECT * FROM coaches WHERE school_id=?',s.id).filter(x=>normalize(x.name)===normalize(c.name));
     let coach=matches[0],decision='imported';
     const emailCollision=c.email&&query('SELECT name FROM coaches WHERE school_id=? AND lower(email)=?',s.id,c.email).some(x=>normalize(x.name)!==normalize(c.name));
-    if(emailCollision||c.uncertain||matches.length>1||(coach&&((coach.email&&c.email&&coach.email.toLowerCase()!==c.email)||(coach.manual_lock)||(coach.role&&normalize(coach.role)!==normalize(c.role))))){decision='review';review++;}
+    if(emailCollision||c.uncertain||matches.length>1||(coach&&((coach.email&&coach.email.toLowerCase()!==c.email)||(coach.phone&&coach.phone!==c.phone)||(coach.x_url&&coach.x_url!==c.x_url)||(coach.manual_lock)||(coach.role&&normalize(coach.role)!==normalize(c.role))))){decision='review';review++;}
     else if(!coach){const result=run("INSERT INTO coaches(school_id,name,role,email,phone,x_url,source_url,status,verified_at) VALUES(?,?,?,?,?,?,?,'verified',?)",s.id,c.name,c.role,c.email,c.phone,c.x_url,page.url,now);coach={id:Number(result.lastInsertRowid)};imported++;}
     else {run("UPDATE coaches SET role=CASE WHEN role='' THEN ? ELSE role END,email=CASE WHEN email='' THEN ? ELSE email END,phone=CASE WHEN phone='' THEN ? ELSE phone END,x_url=CASE WHEN x_url='' THEN ? ELSE x_url END,source_url=?,verified_at=?,status='verified' WHERE id=?",c.role,c.email,c.phone,c.x_url,page.url,now,coach.id);decision='matched';}
     run('INSERT INTO collection_evidence(school_id,coach_id,source_url,observed_at,payload,decision) VALUES(?,?,?,?,?,?)',s.id,coach?.id||null,page.url,now,JSON.stringify(c),decision);
