@@ -71,3 +71,5 @@ if(p==='/api/suppression'&&method==='POST'){const b=await body(req),email=clean(
 return json(res,404,{error:'Not found'})}
 if(method==='GET'&&(p==='/'||p==='/app.js'||p==='/styles.css')){const file=path.join('public',p==='/'?'index.html':p.slice(1));const content=fs.readFileSync(new URL(file,import.meta.url));res.writeHead(200,{'Content-Type':mime[path.extname(file)],'X-Content-Type-Options':'nosniff','Content-Security-Policy':"default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self'; base-uri 'none'; frame-ancestors 'none'",'Referrer-Policy':'no-referrer'});return res.end(content)}return json(res,404,{error:'Not found'})}catch(e){return json(res,400,{error:e.message||'Unexpected error'})}}
 http.createServer(handler).listen(PORT,HOST,()=>console.log(`Hudson Command Center: http://${HOST}:${PORT}`));
+
+// GitHub connection write-access verification (2026-10-11).
