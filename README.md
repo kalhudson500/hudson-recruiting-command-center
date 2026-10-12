@@ -66,3 +66,17 @@ The example records above are illustrative only, not real programs. Divisions ar
 ## Limitations and next production steps
 
 This is a functional **starter MVP**, not a completed nationwide contact database or fully hardened SaaS. It has no live NCAA directory sync, no background crawling, no authenticated X/Instagram APIs, no automated email reply sync, no bounce webhooks, no bulk retry controls, and no multi-user support. For a production deployment, add request rate limiting, secure password recovery/MFA, webhook-driven suppression, audited contact provenance, source-specific collectors with robots/terms checks, scheduled freshness reviews, durable email queues, and automated tests. The starter collector's DNS validation mitigates common local-address fetch risks, but production-grade URL fetching should use egress network rules and strict DNS/redirect controls as well.
+
+## Resumable automatic contact collector (v2)
+
+Deploy with `npm ci` as the Render build command. Existing `DATA_DIR`, persistent disk, credentials, and application records must be retained. Schema changes are additive. Do not replace or reinitialize the production database.
+
+In **Collect Contacts**, choose **Start / Resume All Schools**. A single background worker checks one school at a time, saving progress in SQLite. Work continues while the page is closed and resumes after service restarts when enabled. A paused or sleeping Render service cannot collect until running again. Use Pause, Refresh Progress, or Retry Flagged Schools as needed. The collector processes only existing FBS/FCS/D2/D3 schools; it does not add programs.
+
+Set `BRAVE_SEARCH_API_KEY` in Render for schools without saved directory URLs. Discovery requires evidence that a university-owned `.edu` page links to the athletics domain and school-name agreement in search/page titles. Ambiguous names and unsupported layouts are flagged; discovery will deliberately not accept an unproven search result. Existing staff URLs serve as the school's official domain anchor and should be reviewed if previously imported without validation.
+
+The Cheerio parser supports football table rows and common Sidearm staff cards. It associates name, role, email, phone, and X profile within one record. Mixed-sport general directories, ambiguous emails, cross-domain redirects, fetch failures, robots exclusions, conflicting roles/contact identities, and manually edited contacts are flagged. JavaScript-only directories and other unsupported layouts need additional source adapters. Never infer missing contact fields. Automatic verification indicates the named row was observed on the anchored source, not email deliverability. Missing fields remain empty.
+
+`collection_progress` stores school outcomes. `collection_evidence` stores observed contact JSON, source URLs, timestamps, and import/review decisions. Existing contacts are matched by normalized name within a school, email collisions are flagged, and only empty fields are filled. Existing conflicting values, opt-outs, campaigns, leads, and manual edits are preserved. All Edit Contact changes lock the record against automatic updates. Restarting/retrying does not recreate matched coaches.
+
+Tests: `node --test`. No production data or secrets are committed.

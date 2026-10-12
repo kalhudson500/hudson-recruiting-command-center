@@ -1,1 +1,1 @@
-{"name":"hudson-recruiting-command-center","version":"1.0.0","private":true,"type":"module","scripts":{"start":"node --disable-warning=ExperimentalWarning server.js","dev":"node --watch --disable-warning=ExperimentalWarning server.js"},"engines":{"node":">=22.13.0"}}
+{"name":"hudson-recruiting-command-center","version":"1.0.0","private":true,"type":"module","scripts":{"start":"node --disable-warning=ExperimentalWarning server.js","dev":"node --watch --disable-warning=ExperimentalWarning server.js"},"engines":{"node":">=22.13.0"},"dependencies":{"cheerio":"^1.1.2"}}
