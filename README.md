@@ -30,6 +30,20 @@ A private, responsive NCAA football recruiting CRM, built with **Node.js 22.13+ 
 - Keep the service single-instance (SQLite, in-process send lock); do not run multiple replicas or workers without adding a durable job queue and DB coordination.
 - Do not publish the SQLite database, `.env`, or secrets. This starter has no password-reset flow, account management, or rate limiting; put rate limiting and authentication protections at the reverse proxy.
 
+## Gmail sending setup
+
+Gmail can send campaigns directly from `kalhudson500@gmail.com` on the existing paid Render service. In Render Environment, set:
+
+- `EMAIL_PROVIDER=gmail`
+- `GMAIL_USER=kalhudson500@gmail.com`
+- `GMAIL_APP_PASSWORD` to a Google-generated 16-character app password, entered directly into Render (never commit it or paste it into chat).
+
+Google app passwords require 2-Step Verification and may be unavailable for some account policies. Use a dedicated app password named Hudson Command Center, not the normal Google password. See https://support.google.com/mail/answer/185833. Google password changes revoke app passwords.
+
+Deploy after saving the variables. In Email Campaigns, open the saved campaign and use **Test Gmail Connection**. This checks SMTP authentication without sending an email. Send Next Batch remains disabled when required settings are missing. Each batch verifies the Gmail connection before changing recipient states, so missing/invalid credentials leave recipients pending. Messages use the authenticated Gmail address as sender. Do not automatically retry uncertain SMTP failures: check Gmail Sent mail first, since SMTP cannot guarantee exactly-once delivery after an interrupted connection. Provider acceptance does not guarantee inbox delivery.
+
+Gmail uses TLS on smtp.gmail.com:465. Free Render services block SMTP ports; the existing paid instance supports SMTP. Resend remains available by setting `EMAIL_PROVIDER=resend` and the settings below. No database reset or migration is needed.
+
 ## Email sending setup
 
 1. Purchase/control a dedicated sending domain or subdomain and create an address such as `recruiting@yourdomain.com`.
