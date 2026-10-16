@@ -1,6 +1,6 @@
 import {load} from 'cheerio';
 import fs from 'node:fs';
-import {normalize} from './collector.js';
+import {normalize,parseCoachProfile} from './collector.js';
 import {coachCategory,isFootballCoachRole} from './public/coach-roles.js';
 const seed=JSON.parse(fs.readFileSync(new URL('./california-seed.json',import.meta.url),'utf8'));
 
@@ -57,6 +57,8 @@ export function installCalifornia({db,query,one,run,collector}){
      await collector.checkRobots(job.profile_url);const p=await collector.fetchPage(job.profile_url);
      if(new URL(p.url).hostname!==new URL(job.source_url).hostname)throw Error('Profile redirected off official directory domain');
      const areas=californiaAssignment(p.html,job.name);
+     const fields=parseCoachProfile(p.html,p.url,job.name)||{};
+     for(const key of ['email','phone','x_url'])if(fields[key]&&!job[key])run('UPDATE california_contacts SET '+key+'=? WHERE id=? AND '+key+"=''",fields[key],job.id);
      run("UPDATE california_contacts SET areas=?,area_source_url=?,area_checked_at=?,profile_status='complete',error='' WHERE id=?",areas,areas?p.url:'',new Date().toISOString(),job.id);
     }catch(e){run("UPDATE california_contacts SET profile_status='review',error=? WHERE id=?",String(e.message).slice(0,300),job.id);}
     if(!one("SELECT id FROM california_contacts WHERE school_id=? AND profile_status='pending'",job.school_id))run("UPDATE california_scans SET status='complete',checked_at=? WHERE school_id=?",new Date().toISOString(),job.school_id);
