@@ -1,0 +1,101 @@
+{
+  "verified_at": "2026-10-16T20:41:39.910Z",
+  "schools": [
+    {
+      "name": "College of William & Mary",
+      "division": "FCS",
+      "source_url": "https://tribeathletics.com/sports/football/coaches",
+      "checked_at": "2026-10-16T20:41:39.910Z",
+      "contacts": [
+        {
+          "name": "Mike London",
+          "role": "Head Coach",
+          "email": "",
+          "phone": "(757) 221-3449",
+          "x_url": "",
+          "profile_url": "https://tribeathletics.com/sports/football/roster/coaches/mike-london/3998",
+          "areas": ""
+        },
+        {
+          "name": "Keenan Carter",
+          "role": "Defensive Line Coach / Run Game Coordinator / Recruiting Coordinator",
+          "email": "ktcarter01@wm.edu",
+          "phone": "(757) 221-3378",
+          "x_url": "",
+          "profile_url": "https://tribeathletics.com/sports/football/roster/coaches/keenan-carter/3994",
+          "areas": ""
+        },
+        {
+          "name": "Mike Maloney",
+          "role": "Tight Ends Coach",
+          "email": "mjmaloney@wm.edu",
+          "phone": "(757) 221-2427",
+          "x_url": "",
+          "profile_url": "https://tribeathletics.com/sports/football/roster/coaches/mike-maloney/4005",
+          "areas": "Central New Jersey, Western Pennslyvania, Ohio, California, Arizona"
+        }
+      ]
+    },
+    {
+      "name": "Hamline University",
+      "division": "D3",
+      "source_url": "https://hamlineathletics.com/sports/football/coaches",
+      "checked_at": "2026-10-16T20:41:39.910Z",
+      "contacts": [
+        {
+          "name": "Bob Davies",
+          "role": "Head Football Coach",
+          "email": "rdavies01@hamline.edu",
+          "phone": "651-523-2806",
+          "x_url": "",
+          "profile_url": "https://hamlineathletics.com/sports/football/roster/coaches/bob-davies/1874",
+          "areas": ""
+        },
+        {
+          "name": "Michael Harris",
+          "role": "Assistant Football Coach / Offensive Coordinator",
+          "email": "mharris22@hamline.edu",
+          "phone": "651-523-2331",
+          "x_url": "",
+          "profile_url": "https://hamlineathletics.com/sports/football/roster/coaches/michael-harris/1875",
+          "areas": "Minnesota Private Schools / California"
+        }
+      ]
+    },
+    {
+      "name": "Whittier College",
+      "division": "D3",
+      "source_url": "https://wcpoets.com/sports/football/coaches",
+      "checked_at": "2026-10-16T20:41:39.910Z",
+      "contacts": [
+        {
+          "name": "Cory White",
+          "role": "Head Football Coach",
+          "email": "cwhite@whittier.edu",
+          "phone": "(562) 907-4531",
+          "x_url": "",
+          "profile_url": "https://wcpoets.com/sports/football/roster/coaches/cory-white/429",
+          "areas": "Long Beach, San Diego, Las Vegas, Sacramento"
+        },
+        {
+          "name": "Andrew Jacobs",
+          "role": "Offensive Line",
+          "email": "ajacobs@whittier.edu",
+          "phone": "",
+          "x_url": "",
+          "profile_url": "https://wcpoets.com/sports/football/roster/coaches/andrew-jacobs/486",
+          "areas": "Los Angeles, Oregon"
+        },
+        {
+          "name": "Branden Thomas",
+          "role": "Defensive Line",
+          "email": "",
+          "phone": "(562) 907-4609",
+          "x_url": "",
+          "profile_url": "https://wcpoets.com/sports/football/roster/coaches/branden-thomas/503",
+          "areas": ""
+        }
+      ]
+    }
+  ]
+}
