@@ -14,6 +14,8 @@ export function installCaliforniaFocus({db,query,one,run,california}){
     let saved=matches[0];
     if(!saved){const r=run("INSERT INTO coaches(school_id,name,role,email,phone,x_url,source_url,status,verified_at,notes) VALUES(?,?,?,?,?,?,?,'verified',?,?)",c.school_id,c.name,c.role,c.email,c.phone,c.x_url,c.source_url,c.checked_at,c.areas?'California recruiting assignment: '+c.areas+' | '+c.area_source_url:'California recruiting focus: current school staff');saved={id:Number(r.lastInsertRowid)};byIdentity.set(key,[{...c,id:saved.id}]);}
     else if(!saved.manual_lock)run("UPDATE coaches SET role=?,email=?,phone=?,x_url=?,source_url=?,status='verified',verified_at=? WHERE id=?",c.role,c.email,c.phone,c.x_url,c.source_url,c.checked_at,saved.id);
+    // The user requested X links; filling a missing link does not change a manual contact edit.
+    if(!saved.x_url&&c.x_url)run("UPDATE coaches SET x_url=? WHERE id=? AND x_url=''",c.x_url,saved.id);
     ids.push({id:saved.id,recruiter:Number(Boolean(c.california_recruiter))});
    }
    run('DELETE FROM california_active');for(const item of ids)run('INSERT OR IGNORE INTO california_active(coach_id,california_recruiter) VALUES(?,?)',item.id,item.recruiter);

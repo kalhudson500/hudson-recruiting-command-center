@@ -2,7 +2,9 @@ import {load} from 'cheerio';
 import fs from 'node:fs';
 import {normalize,parseCoachProfile} from './collector.js';
 import {coachCategory,isFootballCoachRole} from './public/coach-roles.js';
+import {namedProfileX,xProfileUrl} from './x-enrichment.js';
 const seed=JSON.parse(fs.readFileSync(new URL('./california-seed.json',import.meta.url),'utf8'));
+const socialLinks=JSON.parse(fs.readFileSync(new URL('./california-x-links.json',import.meta.url),'utf8'));
 
 // Only an explicit, labelled recruiting territory counts. Biographical mentions,
 // former jobs, hometowns and California players on a roster are not assignments.
@@ -59,6 +61,7 @@ export function installCalifornia({db,query,one,run,collector}){
      if(new URL(p.url).hostname!==new URL(job.source_url).hostname)throw Error('Profile redirected off official directory domain');
      const areas=californiaAssignment(p.html,job.name);
      const fields=parseCoachProfile(p.html,p.url,job.name)||{};
+     if(!fields.x_url)fields.x_url=namedProfileX(p.html,p.url,job.name);
      for(const key of ['email','phone','x_url'])if(fields[key]&&!job[key])run('UPDATE california_contacts SET '+key+'=? WHERE id=? AND '+key+"=''",fields[key],job.id);
      run("UPDATE california_contacts SET areas=?,area_source_url=?,area_checked_at=?,profile_status='complete',error='' WHERE id=?",areas,areas?p.url:'',new Date().toISOString(),job.id);
     }catch(e){run("UPDATE california_contacts SET profile_status='review',error=? WHERE id=?",String(e.message).slice(0,300),job.id);}
@@ -88,7 +91,11 @@ export function installCalifornia({db,query,one,run,collector}){
  }
  const timer=setInterval(()=>tick().catch(e=>console.error('California scan:',e.message)),2000);timer.unref();
  const status=()=>{
-  const contacts=query("SELECT * FROM california_contacts ORDER BY name"),scans=query('SELECT s.id,s.name,s.division,c.status,c.error,c.checked_at FROM schools s LEFT JOIN california_scans c ON c.school_id=s.id ORDER BY s.name');
+  const scans=query('SELECT s.id,s.name,s.division,c.status,c.error,c.checked_at FROM schools s LEFT JOIN california_scans c ON c.school_id=s.id ORDER BY s.name'),schoolNames=new Map(scans.map(s=>[s.id,s.name]));
+  const contacts=query("SELECT * FROM california_contacts ORDER BY name").map(c=>{
+   const match=Date.parse(socialLinks.matched_at)>Date.now()-90*86400000?socialLinks.links.find(l=>l.school===schoolNames.get(c.school_id)&&normalize(l.name)===normalize(c.name)):null;
+   return {...c,x_url:xProfileUrl(c.x_url)||xProfileUrl(match?.x_url),x_source_url:c.x_url?c.profile_url||c.source_url:match?.source_url||'',x_checked_at:c.x_url?c.checked_at:match?socialLinks.matched_at:''};
+  });
   return {counts:counts(),schools:scans.map(s=>{const staff=contacts.filter(c=>c.school_id===s.id),recruiters=staff.filter(c=>c.areas&&Date.parse(c.area_checked_at)>Date.now()-90*86400000);return {...s,confirmed:recruiters.length>0,contacts:staff.filter(c=>coachCategory(c.role)==='head'||isDC(c.role)||isDL(c.role)||recruiters.some(r=>r.id===c.id)).map(c=>({...c,defensive_coordinator:isDC(c.role),defensive_line:isDL(c.role),category:coachCategory(c.role)==='head'?'Head coach':isDL(c.role)?'Defensive line coach':isDC(c.role)?'Defensive coordinator':'California recruiter',california_recruiter:recruiters.some(r=>r.id===c.id)}))};})};
  };
  return {status,start:()=>{run('INSERT OR IGNORE INTO california_scans(school_id) SELECT id FROM schools');run('UPDATE california_state SET enabled=1 WHERE id=1');void tick();return counts();},pause:()=>run('UPDATE california_state SET enabled=0 WHERE id=1'),tick};

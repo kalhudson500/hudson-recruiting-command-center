@@ -3,6 +3,14 @@ import assert from 'node:assert/strict';
 import {DatabaseSync} from 'node:sqlite';
 import {californiaAssignment,isDL,isDC,installCalifornia} from '../california.js';
 const profile=body=>'<title>First Coach - Football Coach</title>'+body;
+test('every currently seeded active coach has an attributed direct X profile',()=>{
+ const db=new DatabaseSync(':memory:');db.exec("CREATE TABLE schools(id INTEGER PRIMARY KEY,name TEXT,division TEXT,state TEXT,staff_url TEXT);INSERT INTO schools VALUES(1,'College of William & Mary','FCS','VA','https://tribeathletics.com/sports/football/coaches'),(2,'Hamline University','D3','MN','https://hamlineathletics.com/sports/football/coaches'),(3,'Whittier College','D3','CA','https://wcpoets.com/sports/football/coaches');");
+ const query=(s,...p)=>db.prepare(s).all(...p),one=(s,...p)=>db.prepare(s).get(...p),run=(s,...p)=>db.prepare(s).run(...p);
+ const ca=installCalifornia({db,query,one,run,collector:{}}),rows=ca.status().schools.flatMap(s=>s.contacts);
+ assert.equal(rows.length,12);assert.equal(new Set(rows.map(c=>c.x_url)).size,12);
+ for(const c of rows){assert.match(c.x_url,/^https:\/\/x\.com\/[A-Za-z0-9_]{1,15}$/);assert.ok(c.x_source_url);assert.ok(c.x_checked_at);}
+ assert.equal(rows.find(c=>c.name==='Bob Davies').x_url,'https://x.com/NewBobDaviesFB');ca.pause();
+});
 test('accepts labelled California territories and regional assignments',()=>{
  assert.equal(californiaAssignment(profile('<dl><dt>Other Recruiting Areas</dt><dd>California, Arizona</dd></dl>'),'First Coach'),'California, Arizona');
  assert.equal(californiaAssignment(profile('<p><strong>Recruiting Areas:</strong> Inland Empire, San Diego</p>'),'First Coach'),'Inland Empire, San Diego');

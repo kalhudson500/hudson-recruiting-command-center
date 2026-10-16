@@ -1,6 +1,6 @@
-import {renderCalifornia} from './california.js?v=20261016-focus2';
-import {renderEmailRecipients} from './email-recipients.js?v=20261016-focus2';
-import {renderContactDirectory,bindSchoolPicker} from './contact-directory.js?v=20261016-focus2';
+import {renderCalifornia} from './california.js?v=20261016-x3';
+import {renderEmailRecipients} from './email-recipients.js?v=20261016-x3';
+import {renderContactDirectory,bindSchoolPicker} from './contact-directory.js?v=20261016-x3';
 let csrf='',page='california',schools=[],coaches=[],selected=new Set(),hbcuOnly=false;const $=s=>document.querySelector(s),esc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const api=async(url,method='GET',data)=>{const r=await fetch('/api/'+url,{method,headers:{'Content-Type':'application/json','X-CSRF-Token':csrf},body:data===undefined?undefined:JSON.stringify(data)});const v=await r.json();if(!r.ok)throw Error(v.error||'Request failed');return v};
 async function loadCoaches(){const rows=[];for(let offset=0;;offset+=1000){const batch=await api('coaches?limit=1000&offset='+offset);rows.push(...batch);if(batch.length<1000)break;}return rows.reverse();}

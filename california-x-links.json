@@ -1,0 +1,89 @@
+{
+  "matched_at": "2026-10-16T20:56:25.671002+00:00",
+  "links": [
+    {
+      "school": "College of William & Mary",
+      "name": "Mike London",
+      "x_url": "https://x.com/CoachMikeLondon",
+      "source_url": "https://linktr.ee/WilliamMaryFootball",
+      "match_basis": "Official team link page names Coach London and links this account"
+    },
+    {
+      "school": "College of William & Mary",
+      "name": "Ras-I Dowling",
+      "x_url": "https://x.com/CoachDowl",
+      "source_url": "https://x.com/WMTribeFootball/status/2092051719538565218",
+      "match_basis": "Official team reposts this coach; indexed profile names Coach Ras-I Dowling"
+    },
+    {
+      "school": "College of William & Mary",
+      "name": "Bo Revell",
+      "x_url": "https://x.com/BoRevell",
+      "source_url": "https://w.twstalker.com/BoRevell",
+      "match_basis": "Public profile index names Bo Revell and identifies William and Mary co-defensive coordinator / ILB coach"
+    },
+    {
+      "school": "College of William & Mary",
+      "name": "Keenan Carter",
+      "x_url": "https://x.com/DLRunStoppers",
+      "source_url": "https://x.com/DLRunStoppers?lang=en",
+      "match_basis": "Indexed X account names Keenan Carter Sr.; school and coaching role corroborated by current staff directory"
+    },
+    {
+      "school": "College of William & Mary",
+      "name": "Mike Maloney",
+      "x_url": "https://x.com/CoachMMaloney",
+      "source_url": "https://x.com/CoachMMaloney/reposts",
+      "match_basis": "Indexed X profile names Mike Maloney and identifies William and Mary tight ends coach"
+    },
+    {
+      "school": "Hamline University",
+      "name": "Bob Davies",
+      "x_url": "https://x.com/NewBobDaviesFB",
+      "source_url": "https://sotwe.twstalker.com/NewBobDaviesFB",
+      "match_basis": "Public profile index identifies Hamline head coach and states this replaces the compromised previous account"
+    },
+    {
+      "school": "Hamline University",
+      "name": "Michael Harris",
+      "x_url": "https://x.com/CoachMHarris79",
+      "source_url": "https://x.com/CoachMHarris79",
+      "match_basis": "Indexed X profile names Michael C. Harris and discusses recruiting future Hamline Pipers in California"
+    },
+    {
+      "school": "Hamline University",
+      "name": "Dennis Lee",
+      "x_url": "https://x.com/CoachLeeXiong",
+      "source_url": "https://x.com/HamlineFootball/status/2026075928212672863",
+      "match_basis": "Official Hamline Football announcement identifies Coach Lee; indexed profile lists Hamline defensive coordinator"
+    },
+    {
+      "school": "Whittier College",
+      "name": "Cory White",
+      "x_url": "https://x.com/Coach_CoryWhite",
+      "source_url": "https://x.com/Coach_CoryWhite/status/1252334518444290049",
+      "match_basis": "Indexed X profile names Cory White and identifies Whittier head football coach; former school profile also attributes the handle"
+    },
+    {
+      "school": "Whittier College",
+      "name": "Mark Odin",
+      "x_url": "https://x.com/coach_odin",
+      "source_url": "https://wew.twstalker.com/coach_odin",
+      "match_basis": "Public profile index names Mark Odin and identifies Whittier associate head coach / defensive coordinator"
+    },
+    {
+      "school": "Whittier College",
+      "name": "Andrew Jacobs",
+      "x_url": "https://x.com/apjacobs",
+      "source_url": "https://https.twstalker.com/apjacobs",
+      "match_basis": "Public profile index identifies Coach Jacobs as Whittier offensive line coach and links Whittier recruiting questionnaire"
+    },
+    {
+      "school": "Whittier College",
+      "name": "Branden Thomas",
+      "x_url": "https://x.com/CoachThomas_BT",
+      "source_url": "https://instalker.org/CoachThomas_BT",
+      "match_basis": "Public profile index names Branden BT Thomas and identifies Whittier defensive line coach"
+    }
+  ]
+}

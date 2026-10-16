@@ -18,7 +18,7 @@ export function namedProfileX(html, url, name) {
  const matches = new Set();
  const existing = parseCoachProfile(html, url, name)?.x_url;
  if (existing && xProfileUrl(existing)) matches.add(xProfileUrl(existing));
- $('script,style,nav,footer,header').remove();
+ $('script,style,nav,footer').remove();
  $('dt').each((_, el) => {
   if (!/^(twitter|x|x\s*\/\s*twitter|twitter\s*\/\s*x)\s*:?$/i.test($(el).text().trim())) return;
   const value = $(el).next('dd');
