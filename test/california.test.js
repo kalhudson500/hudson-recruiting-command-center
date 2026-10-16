@@ -1,7 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {DatabaseSync} from 'node:sqlite';
-import {californiaAssignment,isDL,installCalifornia} from '../california.js';
+import {californiaAssignment,isDL,isDC,installCalifornia} from '../california.js';
 const profile=body=>'<title>First Coach - Football Coach</title>'+body;
 test('accepts labelled California territories and regional assignments',()=>{
  assert.equal(californiaAssignment(profile('<dl><dt>Other Recruiting Areas</dt><dd>California, Arizona</dd></dl>'),'First Coach'),'California, Arizona');
@@ -14,6 +14,7 @@ test('does not confuse historical biography, other identity, or unrelated state 
  for(const body of ['<p>First Coach grew up in California and recruited there previously.</p>','<p>Recruiting Areas: Ohio</p><p>Previously coached in California.</p>','<p>Recruiting Areas: Previously recruited California at his former school.</p>'])assert.equal(californiaAssignment(profile(body),'First Coach'),'');
  assert.equal(californiaAssignment(profile('<p>Recruiting Areas: California</p>'),'Another Coach'),'');
 });
+test('DC classification accepts combined roles without including other coordinators',()=>{assert.ok(isDC('Co-Defensive Coordinator / Secondary Coach'));assert.ok(isDC('Defensive Coordinator / Defensive Line'));assert.equal(isDC('Offensive Coordinator'),false);});
 test('DL classification excludes support and other position coaches',()=>{
  assert.ok(isDL('Defensive Coordinator / Defensive Line'));assert.ok(isDL('Defensive Ends Coach'));assert.ok(isDL('DL Coach'));assert.equal(isDL('Linebackers Coach'),false);assert.equal(isDL('Defensive Backs Coach'),false);assert.equal(isDL('Defensive Line Equipment Manager'),false);
 });

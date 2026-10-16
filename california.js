@@ -29,6 +29,7 @@ export function californiaAssignment(html,name){
  });
  return candidates.find(s=>/\b(?:california|calif\.?|CA|socal|norcal|inland empire|san bernardino|riverside county|los angeles|orange county|san diego|sacramento|san francisco|long beach)\b/i.test(s))||'';
 }
+export const isDC=role=>isFootballCoachRole(role)&&/\b(?:defensive|defense)\s+coordinator\b/i.test(role);
 export const isDL=role=>isFootballCoachRole(role)&&/\b(?:defensive\s+(?:line(?:men)?|ends?|tackles?)|d[ -]line|dl|de|dt|edge)\b/i.test(role);
 
 export function installCalifornia({db,query,one,run,collector}){
@@ -36,13 +37,13 @@ export function installCalifornia({db,query,one,run,collector}){
  CREATE TABLE IF NOT EXISTS california_scans(school_id INTEGER PRIMARY KEY REFERENCES schools(id) ON DELETE CASCADE,status TEXT DEFAULT 'pending',source_url TEXT DEFAULT '',checked_at TEXT DEFAULT '',error TEXT DEFAULT '');
  CREATE TABLE IF NOT EXISTS california_contacts(id INTEGER PRIMARY KEY,school_id INTEGER NOT NULL REFERENCES schools(id) ON DELETE CASCADE,name TEXT NOT NULL,role TEXT DEFAULT '',email TEXT DEFAULT '',phone TEXT DEFAULT '',x_url TEXT DEFAULT '',source_url TEXT NOT NULL,profile_url TEXT DEFAULT '',checked_at TEXT NOT NULL,areas TEXT DEFAULT '',area_source_url TEXT DEFAULT '',area_checked_at TEXT DEFAULT '',profile_status TEXT DEFAULT 'pending',error TEXT DEFAULT '',UNIQUE(school_id,name));`);
  db.exec('CREATE TABLE IF NOT EXISTS california_seeded(key TEXT PRIMARY KEY)');
- if(Date.parse(seed.verified_at)>Date.now()-90*86400000&&!one("SELECT key FROM california_seeded WHERE key='20261016'")){
+ if(Date.parse(seed.verified_at)>Date.now()-90*86400000&&!one("SELECT key FROM california_seeded WHERE key='20261016-dc'")){
   db.exec('BEGIN IMMEDIATE');try{
    for(const school of seed.schools){const s=one('SELECT id FROM schools WHERE name=? AND division=?',school.name,school.division);if(!s)continue;
     run("INSERT OR IGNORE INTO california_scans(school_id,status,source_url,checked_at) VALUES(?,'complete',?,?)",s.id,school.source_url,school.checked_at);
     for(const c of school.contacts)run("INSERT OR IGNORE INTO california_contacts(school_id,name,role,email,phone,x_url,source_url,profile_url,checked_at,areas,area_source_url,area_checked_at,profile_status) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,'complete')",s.id,c.name,c.role,c.email,c.phone,c.x_url,school.source_url,c.profile_url,school.checked_at,c.areas,c.areas?c.profile_url:'',c.areas?school.checked_at:'');
    }
-   run("INSERT INTO california_seeded(key) VALUES('20261016')");db.exec('COMMIT');
+   run("INSERT INTO california_seeded(key) VALUES('20261016-dc')");db.exec('COMMIT');
   }catch(e){db.exec('ROLLBACK');throw e;}
  }
  let busy=false;
@@ -88,7 +89,7 @@ export function installCalifornia({db,query,one,run,collector}){
  const timer=setInterval(()=>tick().catch(e=>console.error('California scan:',e.message)),2000);timer.unref();
  const status=()=>{
   const contacts=query("SELECT * FROM california_contacts ORDER BY name"),scans=query('SELECT s.id,s.name,s.division,c.status,c.error,c.checked_at FROM schools s LEFT JOIN california_scans c ON c.school_id=s.id ORDER BY s.name');
-  return {counts:counts(),schools:scans.map(s=>{const staff=contacts.filter(c=>c.school_id===s.id),recruiters=staff.filter(c=>c.areas&&Date.parse(c.area_checked_at)>Date.now()-90*86400000);return {...s,confirmed:recruiters.length>0,contacts:staff.filter(c=>coachCategory(c.role)==='head'||isDL(c.role)||recruiters.some(r=>r.id===c.id)).map(c=>({...c,category:coachCategory(c.role)==='head'?'Head coach':isDL(c.role)?'Defensive line coach':'California recruiter',california_recruiter:recruiters.some(r=>r.id===c.id)}))};})};
+  return {counts:counts(),schools:scans.map(s=>{const staff=contacts.filter(c=>c.school_id===s.id),recruiters=staff.filter(c=>c.areas&&Date.parse(c.area_checked_at)>Date.now()-90*86400000);return {...s,confirmed:recruiters.length>0,contacts:staff.filter(c=>coachCategory(c.role)==='head'||isDC(c.role)||isDL(c.role)||recruiters.some(r=>r.id===c.id)).map(c=>({...c,defensive_coordinator:isDC(c.role),defensive_line:isDL(c.role),category:coachCategory(c.role)==='head'?'Head coach':isDL(c.role)?'Defensive line coach':isDC(c.role)?'Defensive coordinator':'California recruiter',california_recruiter:recruiters.some(r=>r.id===c.id)}))};})};
  };
  return {status,start:()=>{run('INSERT OR IGNORE INTO california_scans(school_id) SELECT id FROM schools');run('UPDATE california_state SET enabled=1 WHERE id=1');void tick();return counts();},pause:()=>run('UPDATE california_state SET enabled=0 WHERE id=1'),tick};
 }

@@ -1,11 +1,11 @@
 {
-  "verified_at": "2026-10-16T20:41:39.910Z",
+  "verified_at": "2026-10-16T20:46:53.369Z",
   "schools": [
     {
       "name": "College of William & Mary",
       "division": "FCS",
       "source_url": "https://tribeathletics.com/sports/football/coaches",
-      "checked_at": "2026-10-16T20:41:39.910Z",
+      "checked_at": "2026-10-16T20:46:53.369Z",
       "contacts": [
         {
           "name": "Mike London",
@@ -14,6 +14,24 @@
           "phone": "(757) 221-3449",
           "x_url": "",
           "profile_url": "https://tribeathletics.com/sports/football/roster/coaches/mike-london/3998",
+          "areas": ""
+        },
+        {
+          "name": "Ras-I Dowling",
+          "role": "Co-Defensive Coordinator / Secondary Coach",
+          "email": "rldowling@wm.edu",
+          "phone": "(757) 221-1980",
+          "x_url": "",
+          "profile_url": "https://tribeathletics.com/sports/football/roster/coaches/ras-i-dowling/3993",
+          "areas": ""
+        },
+        {
+          "name": "Bo Revell",
+          "role": "Co-Defensive Coordinator / Inside Linebackers Coach",
+          "email": "wrrevell@wm.edu",
+          "phone": "(757) 221-3380",
+          "x_url": "",
+          "profile_url": "https://tribeathletics.com/sports/football/roster/coaches/bo-revell/3991",
           "areas": ""
         },
         {
@@ -40,7 +58,7 @@
       "name": "Hamline University",
       "division": "D3",
       "source_url": "https://hamlineathletics.com/sports/football/coaches",
-      "checked_at": "2026-10-16T20:41:39.910Z",
+      "checked_at": "2026-10-16T20:46:53.369Z",
       "contacts": [
         {
           "name": "Bob Davies",
@@ -59,6 +77,15 @@
           "x_url": "",
           "profile_url": "https://hamlineathletics.com/sports/football/roster/coaches/michael-harris/1875",
           "areas": "Minnesota Private Schools / California"
+        },
+        {
+          "name": "Dennis Lee",
+          "role": "Assistant Football Coach / Defensive Coordinator",
+          "email": "dlee35@hamline.edu",
+          "phone": "",
+          "x_url": "",
+          "profile_url": "https://hamlineathletics.com/sports/football/roster/coaches/dennis-lee/1876",
+          "areas": ""
         }
       ]
     },
@@ -66,7 +93,7 @@
       "name": "Whittier College",
       "division": "D3",
       "source_url": "https://wcpoets.com/sports/football/coaches",
-      "checked_at": "2026-10-16T20:41:39.910Z",
+      "checked_at": "2026-10-16T20:46:53.369Z",
       "contacts": [
         {
           "name": "Cory White",
@@ -76,6 +103,15 @@
           "x_url": "",
           "profile_url": "https://wcpoets.com/sports/football/roster/coaches/cory-white/429",
           "areas": "Long Beach, San Diego, Las Vegas, Sacramento"
+        },
+        {
+          "name": "Mark Odin",
+          "role": "Associate Head Coach | Defensive Coordinator",
+          "email": "modin@whittier.edu",
+          "phone": "",
+          "x_url": "",
+          "profile_url": "https://wcpoets.com/sports/football/roster/coaches/mark-odin/430",
+          "areas": ""
         },
         {
           "name": "Andrew Jacobs",
