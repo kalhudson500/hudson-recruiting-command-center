@@ -1,5 +1,5 @@
 {
-  "matched_at": "2026-10-16T20:56:25.671002+00:00",
+  "matched_at": "2026-10-16T22:09:36.011Z",
   "links": [
     {
       "school": "College of William & Mary",
@@ -84,6 +84,76 @@
       "x_url": "https://x.com/CoachThomas_BT",
       "source_url": "https://instalker.org/CoachThomas_BT",
       "match_basis": "Public profile index names Branden BT Thomas and identifies Whittier defensive line coach"
+    },
+    {
+      "school": "Brown University",
+      "name": "James Perry '00",
+      "x_url": "https://x.com/BrownHCPerry",
+      "source_url": "https://brownbears.com/documents/download/2025/11/13/9_Columbia_11.15.25.pdf",
+      "match_basis": "Official Brown game notes identify head coach James Perry and his X handle; current directory corroborates role"
+    },
+    {
+      "school": "Brown University",
+      "name": "Dan Mulrooney",
+      "x_url": "https://x.com/Coach_Mul",
+      "source_url": "https://w.twstalker.com/CoachPDeCapito",
+      "match_basis": "Indexed official Brown Football post identifies defensive coordinator account; current directory matches name and role"
+    },
+    {
+      "school": "Brown University",
+      "name": "Phil DeCapito",
+      "x_url": "https://x.com/CoachPDeCapito",
+      "source_url": "https://w.twstalker.com/CoachPDeCapito",
+      "match_basis": "Named public profile and indexed official team post identify Brown defensive line coach"
+    },
+    {
+      "school": "Brown University",
+      "name": "Andrew DiRienzo",
+      "x_url": "https://x.com/Coach_DiRi",
+      "source_url": "https://w.twstalker.com/Coach_DiRi",
+      "match_basis": "Indexed named profile identifies Brown wide receivers coach and Northern California recruiting territory; current directory matches"
+    },
+    {
+      "school": "Brown University",
+      "name": "Darryl Jackson",
+      "x_url": "https://x.com/coachDjackson1",
+      "source_url": "https://w.twstalker.com/CoachPDeCapito",
+      "match_basis": "Indexed official Brown Football recruiting-area announcement identifies secondary coach and Southern California territory"
+    },
+    {
+      "school": "Cornell University",
+      "name": "Sean Reeder",
+      "x_url": "https://x.com/Sean_Reeder",
+      "source_url": "https://x.com/Sean_Reeder",
+      "match_basis": "Indexed named X profile identifies Cornell co-offensive coordinator/offensive line coach; current official profile lists Southern California"
+    },
+    {
+      "school": "Cornell University",
+      "name": "Mike Toerper",
+      "x_url": "https://x.com/CoachTerp_",
+      "source_url": "https://source.twstalker.com/CoachTerp_",
+      "match_basis": "Named public profile identifies Cornell defensive coordinator; current official directory corroborates"
+    },
+    {
+      "school": "Cornell University",
+      "name": "Dan Swanstrom",
+      "x_url": "https://x.com/DanSwanstrom",
+      "source_url": "https://twicopy.com/tyce_custy/following",
+      "match_basis": "Indexed named account bio identifies Cornell head football coach; current official directory corroborates"
+    },
+    {
+      "school": "Colorado School of Mines",
+      "name": "Kerry Grigsby",
+      "x_url": "https://x.com/CoachGrigs619",
+      "source_url": "https://minesathletics.com/sports/2020/4/21/mines-football-be-recruited.aspx",
+      "match_basis": "Official Mines recruiting page names defensive line coach and links his handle; indexed profile corroborates current role"
+    },
+    {
+      "school": "Colorado School of Mines",
+      "name": "Anthony Makransky",
+      "x_url": "https://x.com/CoachAMakransky",
+      "source_url": "https://x.com/CoachAMakransky/with_replies",
+      "match_basis": "Indexed named X profile identifies Colorado School of Mines defensive backs/pass game coordinator; current staff directory corroborates"
     }
   ]
 }
