@@ -4,6 +4,15 @@ import { createEmailSender, emailStatus } from '../email.js';
 
 const gmail = { EMAIL_PROVIDER: 'gmail', GMAIL_USER: 'kalhudson500@gmail.com', GMAIL_APP_PASSWORD: 'abcd efgh ijkl mnop' };
 
+test('Google Workspace supports KPS custom domain and business sender name', async () => {
+ let message;
+ const env={...gmail,GMAIL_USER:'management@accesskps.com',EMAIL_FROM_NAME:'Mark Hudson | KPS Security'};
+ assert.equal(emailStatus(env).configured,true);
+ const sender=createEmailSender({env,createTransport:()=>({async sendMail(data){message=data;return {accepted:[data.to]}}})});
+ await sender.send({to:'buyer@example.com',subject:'Proposal',text:'Scope',key:'test-kps'});
+ assert.deepEqual(message.from,{name:env.EMAIL_FROM_NAME,address:env.GMAIL_USER});
+});
+
 test('Gmail setup reports missing fields without disclosing the app password', () => {
   assert.deepEqual(emailStatus({ EMAIL_PROVIDER: 'gmail', GMAIL_USER: gmail.GMAIL_USER }).missing, ['GMAIL_APP_PASSWORD']);
   assert.equal(emailStatus(gmail).configured, true);

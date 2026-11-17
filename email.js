@@ -5,7 +5,7 @@ export function emailStatus(env = process.env) {
   if (provider === 'gmail') {
     const from = (env.GMAIL_USER || '').trim().toLowerCase();
     const missing = [];
-    if (!/^[^\s@]+@gmail\.com$/.test(from)) missing.push('GMAIL_USER');
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(from)) missing.push('GMAIL_USER');
     if (!/^[a-z]{16}$/i.test((env.GMAIL_APP_PASSWORD || '').replace(/\s/g, ''))) missing.push('GMAIL_APP_PASSWORD');
     return { provider, from, configured: !missing.length, missing };
   }
@@ -34,7 +34,7 @@ export function createEmailSender({ env = process.env, createTransport = nodemai
       async send({ to, subject, text, key }) {
         try {
           const result = await transport.sendMail({
-            from: { name: 'Kalel Hudson', address: status.from }, to, subject, text,
+            from: { name: env.EMAIL_FROM_NAME || 'Kalel Hudson', address: status.from }, to, subject, text,
             messageId: `<${key}@hudson-recruiting-command-center.onrender.com>`
           });
           if (!result.accepted?.some(address => String(address).toLowerCase() === to.toLowerCase())) throw Error('Recipient rejected');
