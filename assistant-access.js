@@ -23,5 +23,5 @@ export function installAssistantAccess({db,one,run,body,json,passwordHash,env=pr
  };
 }
 export function assistantAllowed(path,method){
- return (path==='/api/security/leads'&&['GET','POST'].includes(method))||(/^\/api\/security\/leads\/\d+$/.test(path)&&method==='PATCH')||(/^\/api\/security\/leads\/\d+\/activity$/.test(path)&&method==='POST')||(path==='/api/logout'&&method==='POST');
+ return (path==='/api/security/geocode'&&method==='POST')||(path==='/api/security/leads'&&['GET','POST'].includes(method))||(/^\/api\/security\/leads\/\d+$/.test(path)&&method==='PATCH')||(/^\/api\/security\/leads\/\d+\/activity$/.test(path)&&method==='POST')||(path==='/api/logout'&&method==='POST');
 }
